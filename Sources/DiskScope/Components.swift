@@ -158,6 +158,13 @@ struct StatusBar: View {
             .lineLimit(1)
             .frame(maxWidth: .infinity)
 
+            if let hidden = model.hiddenSpace, hidden.total > 0 {
+                HStack {
+                    HiddenSpaceButton(space: hidden)
+                    Spacer()
+                }
+            }
+
             if let root = model.root, root.errorCount > 0 {
                 HStack {
                     Spacer()
@@ -175,6 +182,27 @@ struct StatusBar: View {
         .monospacedDigit()
         .padding(.horizontal, 10)
         .frame(height: 24)
+    }
+}
+
+/// "94 GB not in scan": opens the breakdown of used space the scan couldn't see.
+private struct HiddenSpaceButton: View {
+    @EnvironmentObject var model: AppModel
+    let space: HiddenSpace
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing.toggle() } label: {
+            Label("\(Format.bytes(space.total)) not in scan", systemImage: "eye.slash")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.accentColor)
+        .help("Used space on \(space.volumeName) that isn't in the scanned files. Click for details.")
+        .popover(isPresented: $showing, arrowEdge: .top) {
+            HiddenSpaceDetails(space: space, onFullDiskAccess: { model.openFullDiskAccessSettings() })
+                .padding(16)
+                .frame(width: 380)
+        }
     }
 }
 
