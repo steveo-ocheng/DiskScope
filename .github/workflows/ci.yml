@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Test & build
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcode-select -p
+          swift --version
+
+      - name: Test (swift-testing + coverage)
+        run: Tests/run-tests.sh
+
+      - name: Build universal app
+        run: ./build-app.sh
+
+      - name: Zip app
+        run: ditto -c -k --keepParent build/DiskScope.app build/DiskScope.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiskScope-${{ github.sha }}
+          path: build/DiskScope.zip
+          retention-days: 14
+          if-no-files-found: error
