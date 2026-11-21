@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
@@ -80,7 +80,8 @@ PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 echo "==> Signing (${SIGN_IDENTITY}) with Hardened Runtime"
-# No entitlements: no JIT, no unsigned libraries, no network, no Apple Events.
+# No entitlements needed: no JIT, no unsigned libraries, no Apple Events. (Outgoing HTTPS for the
+# optional Ask Claude panel needs no entitlement outside the App Sandbox.)
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
   codesign --force --options runtime --sign - "$APP"
 else
