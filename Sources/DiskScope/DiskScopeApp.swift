@@ -28,12 +28,16 @@ struct DiskScopeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = AppModel()
     @StateObject private var volumes = VolumeStore()
+    @StateObject private var dupes = DuplicatesModel()
+    @StateObject private var claude = AskClaudeModel()
 
     var body: some Scene {
         Window("DiskScope", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(volumes)
+                .environmentObject(dupes)
+                .environmentObject(claude)
                 .frame(minWidth: 900, minHeight: 520)
                 .onAppear {
                     delegate.openHandler = { url in model.scan(url.path) }
@@ -50,6 +54,13 @@ struct DiskScopeApp: App {
                         Button(v.name) { model.scan(v) }
                     }
                 }
+                FindDuplicatesButton()
+                Divider()
+                Menu("Export as CSV") {
+                    Button("Items in This Folder…") { model.exportCSV(.folder) }
+                    Button("Entire Scan…") { model.exportCSV(.all) }
+                }
+                .disabled(model.root == nil || model.exporting)
                 Divider()
                 Button("Close Scan") { model.closeScan() }
                     .keyboardShortcut("w", modifiers: [.command, .shift])
@@ -83,8 +94,35 @@ struct DiskScopeApp: App {
                     .disabled(model.current == nil || model.phase == .scanning)
             }
         }
-    }
 
+        Window("Find Duplicates", id: "duplicates") {
+            DuplicatesView()
+                .environmentObject(dupes)
+        }
+        .defaultSize(width: 1180, height: 760)
+
+        Settings {
+            TabView {
+                ClaudeSettingsView()
+                    .tabItem { Label("Ask Claude", systemImage: "sparkles") }
+            }
+            .environmentObject(claude)
+            .frame(width: 520)
+        }
+    }
+}
+
+/// "Find Duplicates…" (⇧⌘D): opens the duplicates window.
+struct FindDuplicatesButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var title = "Find Duplicates…"
+    var body: some View {
+        Button(title) { openWindow(id: "duplicates") }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+    }
+}
+
+extension DiskScopeApp {
     /// First non-flag argument that names an existing directory.
     private static func launchPathArgument() -> String? {
         var args = Array(CommandLine.arguments.dropFirst())

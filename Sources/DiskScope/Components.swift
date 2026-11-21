@@ -11,7 +11,9 @@ enum IconCache {
         let ext = (node.name as NSString).pathExtension.lowercased()
         if node.isSymlink { return cached("link") { NSWorkspace.shared.icon(for: .aliasFile) } }
         if node.isDirectory {
-            if !ext.isEmpty, let type = UTType(filenameExtension: ext), type.conforms(to: .package) {
+            // conformingTo: .directory — the plain lookup only finds types under public.data, so it
+            // would never recognise .app or other bundles.
+            if !ext.isEmpty, let type = UTType(filenameExtension: ext, conformingTo: .directory), type.conforms(to: .package) {
                 // Apps get their own icon (few of them); other bundles use the type icon.
                 if type.conforms(to: .application) {
                     return cached("app:" + node.path) { NSWorkspace.shared.icon(forFile: node.path) }
@@ -27,7 +29,9 @@ enum IconCache {
         if node.isSymlink { return "Symbolic link" }
         let ext = (node.name as NSString).pathExtension
         if node.isDirectory {
-            if let t = UTType(filenameExtension: ext), t.conforms(to: .package) { return t.localizedDescription ?? "Package" }
+            if let t = UTType(filenameExtension: ext, conformingTo: .directory), t.conforms(to: .package) {
+                return t.localizedDescription ?? "Package"
+            }
             return "Folder"
         }
         return UTType(filenameExtension: ext)?.localizedDescription ?? "Document"

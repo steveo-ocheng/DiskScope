@@ -231,7 +231,9 @@ struct SunburstTests {
         let inB = g.point(fraction: 0.85, radius: g.inner + g.ring / 2)
         #expect(a.contains(inA) && !a.contains(inB))
         #expect(b.contains(inB) && !b.contains(inA))
-        #expect(!a.contains(g.center))   // the center disc isn't part of a ring
+        // The center disc isn't part of a ring. (Probe just off the exact center: the arcs' joints
+        // lie on the axes through it, and point-in-path tests on joints differ between macOS versions.)
+        #expect(!a.contains(CGPoint(x: g.center.x + 1.3, y: g.center.y + 0.7)))
     }
 
     // MARK: Memory safety

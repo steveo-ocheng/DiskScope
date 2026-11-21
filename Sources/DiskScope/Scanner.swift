@@ -303,7 +303,7 @@ private final class Walk: @unchecked Sendable {   // mutable state guarded by st
                 continue   // "." and ".."
             }
             seen += 1
-            if seen & 4095 == 0 {
+            if seen & 1023 == 0 {
                 // Keep progress and cancellation responsive inside huge directories.
                 if scanner.isCancelled { break }
                 flush(&counters, path: job.path)

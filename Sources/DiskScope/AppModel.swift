@@ -72,6 +72,7 @@ final class AppModel: ObservableObject {
 
     // Dialogs
     @Published var alert: AlertInfo?
+    @Published var exporting = false
     @Published var pendingTrash: [FileNode] = []
 
     private var scanner: Scanner?

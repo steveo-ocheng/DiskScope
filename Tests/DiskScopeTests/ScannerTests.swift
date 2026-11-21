@@ -243,12 +243,21 @@ struct ScannerTests {
     @Test func cancellingALargeScanReturnsNilPromptly() throws {
         // Whole-disk scan, cancelled almost immediately: exercises abort, the "/" device logic
         // (stayOnDevice on the boot volume) and the /Volumes, /dev skip list.
+        // Timed from the cancel() call: on a busy CI machine the timer itself can fire late.
+        final class CancelTime: @unchecked Sendable {
+            private let lock = NSLock(); private var value: Date?
+            var date: Date? { get { lock.withLock { value } } set { lock.withLock { value = newValue } } }
+        }
         let scanner = Scanner()
-        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(150)) { scanner.cancel() }
-        let start = Date()
+        let cancelledAt = CancelTime()
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(150)) {
+            cancelledAt.date = Date()
+            scanner.cancel()
+        }
         let result = try scanner.scan(path: "/", stayOnDevice: true) { _ in }
         #expect(result == nil)
-        #expect(Date().timeIntervalSince(start) < 5)
+        let waited = Date().timeIntervalSince(try #require(cancelledAt.date))
+        #expect(waited < 5, "scan took \(waited) s to stop after cancel()")
     }
 
     @Test func skipListCoversDuplicatesAndOtherDisks() {

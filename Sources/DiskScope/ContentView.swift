@@ -63,6 +63,8 @@ private struct DetailView: View {
 
 struct BrowserView: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var dupes: DuplicatesModel
+    @AppStorage("showAskClaude") private var showClaude = false
     let current: FileNode
 
     var body: some View {
@@ -92,7 +94,29 @@ struct BrowserView: View {
             guard !Task.isCancelled else { return }
             await model.performSearch()
         }
-        .toolbar { BrowserToolbar(current: current) }
+        .toolbar { BrowserToolbar(current: current, showClaude: $showClaude) }
+        .inspector(isPresented: $showClaude) {
+            AskClaudePanel(contextProvider: claudeContext)
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
+        }
+    }
+
+    /// What Ask Claude is told about the disk (shown to the user under "What gets sent").
+    private func claudeContext() -> String {
+        guard let root = model.root, let current = model.current else { return "" }
+        var text = DiskSummary.make(root: root, current: current, hidden: model.hiddenSpace,
+                                    volume: model.volume, showApparent: model.showApparentSize)
+        if let groups = dupes.result?.groups, !groups.isEmpty {
+            let home = NSHomeDirectory()
+            func tidy(_ path: String) -> String {
+                Format.displaySafe(path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path)
+            }
+            let lines = groups.prefix(20).map { g in
+                "\(g.copies) copies × \(Format.bytes(g.size)): " + g.files.map { tidy($0.path) }.joined(separator: " | ")
+            }
+            text += "\n\n" + DiskSummary.duplicatesSection(lines: lines)
+        }
+        return text
     }
 
     private struct SearchKey: Equatable { let text: String; let whole: Bool; let revision: Int }
@@ -100,7 +124,10 @@ struct BrowserView: View {
 
 private struct BrowserToolbar: ToolbarContent {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var dupes: DuplicatesModel
+    @Environment(\.openWindow) private var openWindow
     let current: FileNode
+    @Binding var showClaude: Bool
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
@@ -161,12 +188,30 @@ private struct BrowserToolbar: ToolbarContent {
                 Button("Rescan “\(current.parent == nil ? PathBar.rootTitle(current) : current.name)”") { model.rescanCurrent() }
                 Button("Copy Path") { model.copyPaths(targets.isEmpty ? [current] : targets) }
                 Divider()
+                Button("Find Duplicates in “\(current.parent == nil ? PathBar.rootTitle(current) : current.name)”…") {
+                    dupes.set(.a, path: current.path)
+                    dupes.set(.b, path: nil)
+                    openWindow(id: "duplicates")
+                }
+                Menu("Export as CSV") {
+                    Button("Items in This Folder…") { model.exportCSV(.folder) }
+                    Button("Entire Scan…") { model.exportCSV(.all) }
+                }
+                .disabled(model.exporting)
+                Divider()
                 Button("Scan Another Folder…") { model.chooseFolder() }
                 Button("Close Scan") { model.closeScan() }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
             .help("More actions")
+        }
+
+        ToolbarItem {
+            Toggle(isOn: $showClaude) {
+                Label("Ask Claude", systemImage: "sparkles")
+            }
+            .help("Ask Claude about this scan (optional; uses your own API key)")
         }
     }
 }
@@ -202,6 +247,8 @@ struct WelcomeView: View {
                         .keyboardShortcut(.defaultAction)
                     Text("or drop a folder here").foregroundStyle(.secondary)
                 }
+                FindDuplicatesButton(title: "Find Duplicate Files…")
+                    .buttonStyle(.link)
             }
             .padding(32)
             .frame(maxWidth: 820)

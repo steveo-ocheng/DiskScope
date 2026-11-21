@@ -29,9 +29,9 @@ BIN="$SCRATCH/debug/DiskScopePackageTests.xctest/Contents/MacOS/DiskScopePackage
 echo
 echo "== Coverage: logic =="
 xcrun llvm-cov report "$BIN" -instr-profile "$PROFDATA" \
-  Sources/DiskScope/{Scanner,FileNode,AppModel,Volumes,HiddenSpace}.swift
+  Sources/DiskScope/{Scanner,FileNode,AppModel,Volumes,HiddenSpace,DuplicateFinder,DuplicatesModel,RemovalScript,CSV,ScanExport,ClaudeClient,DiskSummary,AskClaude,KeychainStore}.swift
 echo
 echo "== Coverage: UI (not unit-tested) =="
 xcrun llvm-cov report "$BIN" -instr-profile "$PROFDATA" \
-  Sources/DiskScope/{ContentView,Sidebar,ColumnBrowser,ListBrowser,Components,DiskScopeApp}.swift
+  Sources/DiskScope/{ContentView,Sidebar,ColumnBrowser,ListBrowser,Components,DiskScopeApp,Sunburst,DuplicatesView,ContentPreview,AskClaudeView}.swift
 exit $STATUS

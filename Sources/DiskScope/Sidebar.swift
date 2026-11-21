@@ -4,6 +4,7 @@ import SwiftUI
 struct Sidebar: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var volumes: VolumeStore
+    @Environment(\.openWindow) private var openWindow
 
     private struct Favorite: Identifiable {
         let name: String, icon: String, path: String
@@ -66,6 +67,10 @@ struct Sidebar: View {
             VStack(alignment: .leading, spacing: 6) {
                 Button { model.chooseFolder() } label: {
                     Label("Scan Folder…", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.borderless)
+                Button { openWindow(id: "duplicates") } label: {
+                    Label("Find Duplicates…", systemImage: "square.on.square")
                 }
                 .buttonStyle(.borderless)
                 Toggle("Stay on one volume", isOn: $model.stayOnDevice)
