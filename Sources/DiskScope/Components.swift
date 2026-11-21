@@ -108,7 +108,12 @@ struct PathBar: View {
     let current: FileNode
 
     var body: some View {
-        let chain = current.ancestry + (model.viewMode == .columns ? [model.selectedFile].compactMap { $0 } : [])
+        let chain: [FileNode] = switch model.viewMode {
+        case .list: current.ancestry
+        case .columns: current.ancestry + [model.selectedFile].compactMap { $0 }
+        // A sunburst selection can be several rings deep, so show its own full path.
+        case .sunburst: model.selectedFile?.ancestry ?? current.ancestry
+        }
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 3) {
                 ForEach(Array(chain.enumerated()), id: \.element.id) { i, node in

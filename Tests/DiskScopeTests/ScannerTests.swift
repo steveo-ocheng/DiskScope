@@ -252,7 +252,8 @@ struct ScannerTests {
     }
 
     @Test func skipListCoversDuplicatesAndOtherDisks() {
-        #expect(Scanner.skipPaths == ["/System/Volumes/Data", "/Volumes", "/dev"])
+        #expect(Scanner.skipPaths == ["/System/Volumes/Data", "/Volumes", "/dev",
+                                      "/System/Volumes/Update/mnt1", "/System/Volumes/Update/SFR/mnt1"])
         #expect((4...12).contains(Scanner.defaultThreadCount))
     }
 

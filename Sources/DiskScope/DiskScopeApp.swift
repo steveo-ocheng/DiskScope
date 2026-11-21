@@ -59,6 +59,7 @@ struct DiskScopeApp: App {
                 Picker("View", selection: $model.viewMode) {
                     Text("as List").tag(ViewMode.list).keyboardShortcut("2")
                     Text("as Columns").tag(ViewMode.columns).keyboardShortcut("3")
+                    Text("as Sunburst").tag(ViewMode.sunburst).keyboardShortcut("4")
                 }
                 .pickerStyle(.inline)
                 Divider()

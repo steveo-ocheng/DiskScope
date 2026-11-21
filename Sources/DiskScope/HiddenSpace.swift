@@ -99,8 +99,13 @@ extension HiddenSpace {
         // The Data volume's contents appear under / through firmlinks (/Users, /Applications…).
         if root == "/" && mountPoint == "/System/Volumes/Data" { return true }
         if stayOnDevice { return false }
-        guard mountPoint.hasPrefix(root == "/" ? "/" : root + "/") else { return false }
-        return !Scanner.skipPaths.contains { mountPoint == $0 || mountPoint.hasPrefix($0 + "/") }
+        let rootPrefix = root == "/" ? "/" : root + "/"
+        guard mountPoint.hasPrefix(rootPrefix) else { return false }
+        // The scanner skips those paths only when they're below the root (scanning /Volumes/X
+        // still walks /Volumes/X/…), so only skip paths inside the root can cut the mount off.
+        return !Scanner.skipPaths.contains { skip in
+            skip.hasPrefix(rootPrefix) && (mountPoint == skip || mountPoint.hasPrefix(skip + "/"))
+        }
     }
 
     /// "/dev/disk3s1s1" → (container "disk3", volume "disk3s1"). Snapshot mounts ("name@/dev/…")

@@ -119,6 +119,7 @@ private struct BrowserToolbar: ToolbarContent {
             Picker("View", selection: $model.viewMode) {
                 Label("as List", systemImage: "list.bullet").tag(ViewMode.list)
                 Label("as Columns", systemImage: "rectangle.split.3x1").tag(ViewMode.columns)
+                Label("as Sunburst", systemImage: "chart.pie").tag(ViewMode.sunburst)
             }
             .pickerStyle(.segmented)
             .help("Change the item arrangement")
