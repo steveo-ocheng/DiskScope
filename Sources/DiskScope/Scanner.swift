@@ -106,10 +106,15 @@ final class Scanner: @unchecked Sendable {   // mutable state is guarded by `can
 
 // MARK: - Internals
 
+/// Identity of a file system object, used to detect a directory being swapped between
+/// the moment it's listed in its parent and the moment it's opened.
+private struct FileID: Hashable { let dev: dev_t; let ino: ino_t }
+
 private struct Job: @unchecked Sendable {   // FileNode is handed off through WorkQueue's lock
     let node: FileNode
     let path: String
     let followSymlink: Bool
+    var expected: FileID? = nil  // nil for the root
 }
 
 /// LIFO work stack with completion detection: `pending` counts jobs queued + in flight.
@@ -257,6 +262,18 @@ private final class Walk: @unchecked Sendable {   // mutable state guarded by st
             counters.errors += 1
             return
         }
+        // Security: the path was built when the parent was listed, possibly much earlier and on
+        // another thread. If any component was swapped for a symlink since, open() could land
+        // somewhere else — so require the opened directory to be the exact one we listed.
+        if let expected = job.expected {
+            var opened = stat()
+            guard fstat(fd, &opened) == 0, opened.st_dev == expected.dev, opened.st_ino == expected.ino else {
+                close(fd)
+                dirNode.errorCount = 1
+                counters.errors += 1
+                return
+            }
+        }
         guard let dir = fdopendir(fd) else {
             close(fd)
             dirNode.errorCount = 1
@@ -269,7 +286,13 @@ private final class Walk: @unchecked Sendable {   // mutable state guarded by st
         var st = stat()
         var seen = 0
 
-        while let ent = readdir(dir) {
+        while true {
+            errno = 0
+            guard let ent = readdir(dir) else {
+                // NULL with errno set is an I/O error mid-listing, not the end: flag the partial result.
+                if errno != 0 { dirNode.errorCount = 1; counters.errors += 1 }
+                break
+            }
             let namePtr = (UnsafeRawPointer(ent) + Walk.nameOffset).assumingMemoryBound(to: CChar.self)
             let nameLength = Int(ent.pointee.d_namlen)
             if namePtr[0] == 0x2E && (nameLength == 1 || (nameLength == 2 && namePtr[1] == 0x2E)) {
@@ -282,8 +305,12 @@ private final class Walk: @unchecked Sendable {   // mutable state guarded by st
                 flush(&counters, path: job.path)
             }
 
-            let name = String(decoding: UnsafeRawBufferPointer(start: namePtr, count: nameLength),
-                              as: UTF8.self)
+            // Names that aren't valid UTF-8 (possible on some non-APFS volumes) can't be represented
+            // exactly in a String path. Keep a lossy display name but flag the item and never
+            // descend into it, so a mangled path can't be used to read or trash a different file.
+            let validName = String(validatingCString: namePtr)
+            let name = validName ?? String(decoding: UnsafeRawBufferPointer(start: namePtr, count: nameLength),
+                                           as: UTF8.self)
 
             guard fstatat(fd, namePtr, &st, AT_SYMLINK_NOFOLLOW) == 0 else {
                 let node = FileNode(name: name, isDirectory: false, isSymlink: false,
@@ -318,8 +345,14 @@ private final class Walk: @unchecked Sendable {   // mutable state guarded by st
             counters.items += 1
             counters.bytes += disk
 
+            if validName == nil {
+                node.errorCount = 1
+                counters.errors += 1
+                continue
+            }
             if let childPath, allowedDevices?.contains(st.st_dev) ?? true {
-                subdirs.append(Job(node: node, path: childPath, followSymlink: false))
+                subdirs.append(Job(node: node, path: childPath, followSymlink: false,
+                                   expected: FileID(dev: st.st_dev, ino: st.st_ino)))
             }
         }
 

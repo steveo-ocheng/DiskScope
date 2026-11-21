@@ -205,7 +205,7 @@ struct FilePreview: View {
                 }
                 .font(.caption)
                 HStack {
-                    Button("Open") { model.open(node) }
+                    Button("Open") { model.open(node, explicit: true) }
                     Button("Show in Finder") { model.revealInFinder([node]) }
                 }
                 .controlSize(.small)

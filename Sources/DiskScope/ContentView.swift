@@ -19,14 +19,24 @@ struct ContentView: View {
             Button("Move to Trash", role: .destructive) { model.confirmTrash() }
             Button("Cancel", role: .cancel) { model.pendingTrash = [] }
         } message: {
-            Text("This frees about \(Format.bytes(model.pendingTrash.reduce(0) { $0 + $1.diskSize })) once the Trash is emptied.")
+            Text(verbatim: trashMessage)
         }
     }
 
     private var trashTitle: String {
         let items = model.pendingTrash
         if items.isEmpty { return "" }
-        return items.count == 1 ? "Move “\(items[0].name)” to the Trash?" : "Move \(items.count) items to the Trash?"
+        return items.count == 1 ? "Move “\(Format.displaySafe(items[0].name))” to the Trash?"
+                                : "Move \(items.count) items to the Trash?"
+    }
+
+    /// Full paths (sanitized) so it's unambiguous what will be moved.
+    private var trashMessage: String {
+        let items = model.pendingTrash
+        let shown = items.prefix(6).map { Format.displaySafe($0.path) }
+        let more = items.count > shown.count ? "\n…and \(items.count - shown.count) more" : ""
+        let size = Format.bytes(items.reduce(0) { $0 + $1.diskSize })
+        return shown.joined(separator: "\n") + more + "\n\nThis frees about \(size) once the Trash is emptied."
     }
 }
 

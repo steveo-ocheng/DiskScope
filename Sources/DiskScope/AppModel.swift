@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import SwiftUI
 
 struct AlertInfo: Identifiable {
@@ -73,6 +74,13 @@ final class AppModel: ObservableObject {
     private var scanner: Scanner?
     private var sortCache: [ObjectIdentifier: [FileNode]] = [:]
 
+    /// Performs the actual move to the Trash. Injectable so tests never touch the user's Trash.
+    private let trasher: (URL) throws -> Void
+
+    init(trasher: @escaping (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }) {
+        self.trasher = trasher
+    }
+
     // MARK: Sorting
 
     /// Children in the current sort order, cached until the tree or sort order changes.
@@ -120,11 +128,14 @@ final class AppModel: ObservableObject {
     func scan(_ volume: Volume) { scan(volume.path) }
 
     func scan(_ rawPath: String) {
-        let path = URL(fileURLWithPath: (rawPath as NSString).expandingTildeInPath).standardizedFileURL.path
+        let requested = URL(fileURLWithPath: (rawPath as NSString).expandingTildeInPath).standardizedFileURL.path
+        // Canonicalize (resolve symlinks like /tmp → /private/tmp) so every node path is a real,
+        // symlink-free path. TrashGuard.verify relies on this to detect paths swapped after the scan.
         var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
-            alert = AlertInfo(title: "Can't scan “\((path as NSString).lastPathComponent)”",
-                              message: "\(path) is not a folder or no longer exists.")
+        guard let path = TrashGuard.realPath(requested),
+              FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+            alert = AlertInfo(title: "Can't scan “\(Format.displaySafe((requested as NSString).lastPathComponent))”",
+                              message: "\(Format.displaySafe(requested)) is not a folder or no longer exists.")
             return
         }
         // Free the previous tree before building a new one; large scans can hold millions of nodes.
@@ -166,14 +177,16 @@ final class AppModel: ObservableObject {
                 self.stats = s
             }
         }
-        Task.detached(priority: .userInitiated) { [weak self] in
+        // scan() blocks for the whole walk, so run it on a GCD thread rather than tying up a
+        // thread of Swift's small cooperative pool.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let outcome: Result<FileNode?, Error>
             do {
                 outcome = .success(try scanner.scan(path: path, stayOnDevice: stayOnDevice, progress: report))
             } catch {
                 outcome = .failure(error)
             }
-            await MainActor.run { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self, self.scanner === scanner else { return }
                 self.scanner = nil
                 switch outcome {
@@ -259,13 +272,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func open(_ node: FileNode) {
+    /// Double-click / Return. Folders are browsed; documents open in their default app.
+    /// Apps, scripts and executables are never launched implicitly — they're shown in Finder
+    /// unless the user explicitly chose "Open" from a menu (`explicit: true`).
+    func open(_ node: FileNode, explicit: Bool = false) {
         if node.isDirectory {
             navigate(to: node)
-        } else if !node.isSymlink {
-            NSWorkspace.shared.open(URL(fileURLWithPath: node.path))
-        } else {
+        } else if node.isSymlink || (!explicit && LaunchSafety.isLaunchable(path: node.path)) {
             revealInFinder([node])
+        } else {
+            NSWorkspace.shared.open(URL(fileURLWithPath: node.path))
         }
     }
 
@@ -279,10 +295,22 @@ final class AppModel: ObservableObject {
     func goForward() { stepHistory(+1) }
 
     private func stepHistory(_ delta: Int) {
-        var i = historyIndex + delta
-        // Skip entries that were trashed or replaced since we visited them.
-        while i >= 0, i < history.count, !isAttached(history[i]) { history.remove(at: i); if delta < 0 { i -= 1 } }
-        guard i >= 0, i < history.count else { updateHistoryFlags(); return }
+        // Drop entries that were trashed or replaced since we visited them, keeping the index
+        // anchored on the current entry (which may appear more than once, so track by position).
+        var kept: [FileNode] = []
+        var newIndex = -1
+        for (j, node) in history.enumerated() {
+            if j == historyIndex {
+                kept.append(node)
+                newIndex = kept.count - 1
+            } else if isAttached(node) {
+                kept.append(node)
+            }
+        }
+        history = kept
+        historyIndex = newIndex
+        let i = historyIndex + delta
+        guard historyIndex >= 0, i >= 0, i < history.count else { updateHistoryFlags(); return }
         historyIndex = i
         current = history[i]
         selectedFile = nil
@@ -383,31 +411,45 @@ final class AppModel: ObservableObject {
         if !blocked.isEmpty {
             alert = AlertInfo(title: "Protected item",
                               message: "DiskScope won't move system or top-level folders to the Trash:\n"
-                                + blocked.map(\.path).joined(separator: "\n"))
+                                + blocked.map { Format.displaySafe($0.path) }.joined(separator: "\n"))
             return
         }
-        pendingTrash = candidates
+        let unreliable = candidates.filter(TrashGuard.isUnreliable)
+        if !unreliable.isEmpty {
+            alert = AlertInfo(title: "Can't move to Trash",
+                              message: "These items couldn't be read reliably during the scan. Use Show in Finder instead:\n"
+                                + unreliable.map { Format.displaySafe($0.path) }.joined(separator: "\n"))
+            return
+        }
+        // Drop items already covered by another selected folder (trashing the folder takes them too).
+        pendingTrash = candidates.filter { node in
+            !candidates.contains { other in other !== node && Self.isInside(node, other) }
+        }
     }
 
     func confirmTrash() {
         var failures: [String] = []
-        for node in pendingTrash {
+        for node in pendingTrash where node.parent != nil { // skip items detached by an earlier iteration
+            let name = Format.displaySafe(node.name)
             // Re-check right before acting: the item may have been changed or replaced since the scan.
             switch TrashGuard.verify(node) {
             case .gone:
                 detach(node)
                 continue
-            case .changedKind:
-                failures.append("\(node.name): it changed since the scan. Rescan and try again.")
+            case .changedKind, .pathChanged:
+                failures.append("\(name): it changed since the scan. Rescan and try again.")
+                continue
+            case .unreadable(let code):
+                failures.append("\(name): \(String(cString: strerror(code)))")
                 continue
             case .ok:
                 break
             }
             do {
-                try FileManager.default.trashItem(at: URL(fileURLWithPath: node.path), resultingItemURL: nil)
+                try trasher(URL(fileURLWithPath: node.path))
                 detach(node)
             } catch {
-                failures.append("\(node.name): \(error.localizedDescription)")
+                failures.append("\(name): \(error.localizedDescription)")
             }
         }
         pendingTrash = []
@@ -457,7 +499,26 @@ final class AppModel: ObservableObject {
 
 /// Safety checks before anything is moved to the Trash.
 enum TrashGuard {
-    enum Check { case ok, gone, changedKind }
+    enum Check: Equatable {
+        case ok
+        case gone                // no longer exists
+        case changedKind         // file ↔ folder ↔ symlink since the scan
+        case pathChanged         // an enclosing folder is now a symlink / was moved
+        case unreadable(Int32)   // lstat failed for another reason (errno)
+    }
+
+    /// Items whose own entry failed during the scan: a file that couldn't be stat'd, or any item
+    /// whose name wasn't valid UTF-8 (its path is lossy, so it could name a different file).
+    static func isUnreliable(_ node: FileNode) -> Bool {
+        node.errorCount > 0 && (!node.isDirectory || node.name.unicodeScalars.contains("\u{FFFD}"))
+    }
+
+    /// realpath(3): absolute path with all symlinks, "." and ".." resolved; nil if it doesn't exist.
+    static func realPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
 
     private static let home = NSHomeDirectory()
 
@@ -487,18 +548,80 @@ enum TrashGuard {
         return false
     }
 
-    /// lstat (never following symlinks) and confirm the item is still the same kind of thing we scanned.
+    /// Confirm the item is still what we scanned, at the same real location:
+    /// - every enclosing folder still resolves to itself (none was swapped for a symlink), so the
+    ///   move can't be redirected elsewhere — scan roots are canonical, so node paths are real paths;
+    /// - lstat (never following symlinks) shows the same kind of item.
+    /// - for files and links, size and modification time still match the scan, so a different
+    ///   file now sitting at the same path is never trashed by mistake.
     static func verify(_ node: FileNode) -> Check {
+        let mtime = node.modified == .distantPast ? nil : Int(node.modified.timeIntervalSince1970)
+        return verify(path: node.path, isDirectory: node.isDirectory, isSymlink: node.isSymlink,
+                      expectedMtime: mtime, expectedSize: node.apparentSize)
+    }
+
+    static func verify(path: String, isDirectory: Bool, isSymlink: Bool,
+                       expectedMtime: Int? = nil, expectedSize: Int64? = nil) -> Check {
+        let parentPath = (path as NSString).deletingLastPathComponent
+        guard let realParent = realPath(parentPath) else {
+            return errno == ENOENT ? .gone : .unreadable(errno)
+        }
+        if realParent != parentPath { return .pathChanged }
         var st = stat()
-        guard lstat(node.path, &st) == 0 else { return .gone }
+        guard lstat(path, &st) == 0 else { return errno == ENOENT ? .gone : .unreadable(errno) }
         let type = st.st_mode & S_IFMT
-        if node.isDirectory != (type == S_IFDIR) { return .changedKind }
-        if node.isSymlink != (type == S_IFLNK) { return .changedKind }
+        if isDirectory != (type == S_IFDIR) { return .changedKind }
+        if isSymlink != (type == S_IFLNK) { return .changedKind }
+        // Folder mtimes change whenever Finder writes .DS_Store, so only files/links are compared.
+        if !isDirectory {
+            if let expectedMtime, UInt32(clamping: Int(st.st_mtimespec.tv_sec)) != UInt32(clamping: expectedMtime) {
+                return .changedKind
+            }
+            // Extra hard links are recorded with size 0 (counted once), so skip the size check for them.
+            if let expectedSize, st.st_nlink <= 1, Int64(st.st_size) != expectedSize { return .changedKind }
+        }
         return .ok
     }
 }
 
+/// Decides when a double-click must not launch something.
+enum LaunchSafety {
+    private static let launchableExtensions: Set<String> = [
+        "app", "command", "tool", "sh", "bash", "zsh", "csh", "ksh", "fish", "terminal", "pkg", "mpkg",
+        "workflow", "action", "scpt", "scptd", "applescript", "osascript", "jar", "py", "rb", "pl", "php",
+        "js", "jxa", "url", "webloc", "inetloc", "fileloc", "prefpane", "saver", "kext", "plugin",
+        "dylib", "bundle", "mobileconfig", "dmg", "iso",
+    ]
+
+    /// True for apps, scripts, installers, links and anything with an execute bit.
+    static func isLaunchable(path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        if launchableExtensions.contains(ext) { return true }
+        if let type = UTType(filenameExtension: ext),
+           type.conforms(to: .executable) || type.conforms(to: .script) || type.conforms(to: .application) {
+            return true
+        }
+        var st = stat()
+        if lstat(path, &st) == 0, (st.st_mode & S_IFMT) == S_IFREG, (st.st_mode & 0o111) != 0 { return true }
+        return false
+    }
+}
+
 enum Format {
+    /// Makes untrusted file names safe to show in prompts: control characters and Unicode
+    /// bidi/invisible formatting characters (which can disguise "evil‮txt.app" as "evilppa.txt")
+    /// are replaced with a visible "�".
+    static func displaySafe(_ s: String) -> String {
+        String(String.UnicodeScalarView(s.unicodeScalars.map { scalar in
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator, .privateUse, .unassigned, .surrogate:
+                return "\u{FFFD}"
+            default:
+                return scalar
+            }
+        }))
+    }
+
     static func bytes(_ n: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: n, countStyle: .file)
     }

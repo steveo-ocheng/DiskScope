@@ -158,7 +158,7 @@ struct ItemMenu: View {
 
     var body: some View {
         if nodes.count == 1, let n = nodes.first {
-            Button(n.isDirectory ? "Open" : "Open with Default App") { model.open(n) }
+            Button(n.isDirectory ? "Open" : "Open with Default App") { model.open(n, explicit: true) }
         }
         Button("Show in Finder") { model.revealInFinder(nodes) }
         Button("Copy Path") { model.copyPaths(nodes) }

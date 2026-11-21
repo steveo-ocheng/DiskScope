@@ -42,7 +42,7 @@ struct Volume: Identifiable, Hashable, Sendable {
     init?(url: URL) {
         guard let v = try? url.resourceValues(forKeys: Set(Self.keys)) else { return nil }
         if v.volumeIsBrowsable == false { return nil }
-        path = url.standardizedFileURL.path
+        path = TrashGuard.realPath(url.path) ?? url.standardizedFileURL.path
         isRoot = path == "/"
         name = v.volumeLocalizedName ?? url.lastPathComponent
         total = Int64(v.volumeTotalCapacity ?? 0)

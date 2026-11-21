@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DiskScope — see what's using your Mac's disk space</title>
+<meta name="description" content="DiskScope is a fast, native macOS disk-usage browser — like ncdu, with a Finder-style interface. Pick any drive or folder and find what's taking up space.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2b2470">
+<meta property="og:type" content="website">
+<meta property="og:title" content="DiskScope — see what's using your Mac's disk space">
+<meta property="og:description" content="A fast, native macOS disk-usage browser with a Finder-style interface. Source on GitHub.">
+<meta property="og:url" content="https://steveo-ocheng.github.io/DiskScope/">
+<meta property="og:image" content="https://steveo-ocheng.github.io/DiskScope/icon.png">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --bg-2: #ffffff;
+    --text: #1b1b24;
+    --muted: #5b5c6b;
+    --line: #e3e3ec;
+    --accent: #5b45e0;
+    --accent-2: #e8407a;
+    --card: #ffffff;
+    --code-bg: #15132b;
+    --code-text: #e9e7ff;
+    --hero-1: #2a1f6e;
+    --hero-2: #121233;
+    /* mock window */
+    --win: #ffffff;
+    --win-bar: #f1f1f4;
+    --win-side: #ececf1;
+    --win-line: #dedee5;
+    --win-text: #26262e;
+    --win-muted: #7a7a86;
+    --sel: #2463eb;
+    --sel-dim: #d9d9e0;
+    --track: #e2e2ea;
+    --shadow: 0 30px 80px -20px rgba(30, 20, 90, .35), 0 8px 24px -8px rgba(30, 20, 90, .25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f17;
+      --bg-2: #15151f;
+      --text: #ececf3;
+      --muted: #a2a3b3;
+      --line: #2a2a38;
+      --accent: #8f7dff;
+      --accent-2: #ff6b9a;
+      --card: #181824;
+      --code-bg: #0b0a1a;
+      --win: #1f1f26;
+      --win-bar: #2a2a31;
+      --win-side: #25252c;
+      --win-line: #3a3a42;
+      --win-text: #e8e8ee;
+      --win-muted: #9a9aa6;
+      --sel: #2f6df0;
+      --sel-dim: #3c3c46;
+      --track: #3a3a44;
+      --shadow: 0 30px 80px -20px rgba(0, 0, 0, .7), 0 8px 24px -8px rgba(0, 0, 0, .5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 17px;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 16px; top: 16px; background: var(--bg-2); padding: 8px 12px; border-radius: 8px; z-index: 10; }
+
+  /* ---------- Hero ---------- */
+  header.hero {
+    background:
+      radial-gradient(900px 420px at 75% 10%, rgba(143, 92, 255, .45), transparent 60%),
+      radial-gradient(700px 380px at 10% 0%, rgba(232, 64, 122, .25), transparent 60%),
+      linear-gradient(160deg, var(--hero-1), var(--hero-2));
+    color: #fff;
+    padding: 28px 0 0;
+    overflow: hidden;
+  }
+  nav.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 700; font-size: 18px; }
+  .brand img { width: 32px; height: 32px; }
+  nav.top ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; }
+  nav.top a.navlink { color: rgba(255,255,255,.82); text-decoration: none; font-size: 15px; }
+  nav.top a.navlink:hover { color: #fff; }
+  .hero-body { text-align: center; padding: 56px 0 40px; }
+  .hero-body img.appicon { width: 132px; height: 132px; filter: drop-shadow(0 14px 30px rgba(0,0,0,.45)); }
+  .hero h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.08; margin: 18px 0 14px; letter-spacing: -0.02em; }
+  .hero p.lede { font-size: clamp(18px, 2.2vw, 21px); color: rgba(255,255,255,.86); max-width: 680px; margin: 0 auto 28px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 999px; font-weight: 600; font-size: 16px; text-decoration: none;
+  }
+  .btn.primary { background: #fff; color: #23195e; }
+  .btn.primary:hover { background: #efeaff; }
+  .btn.ghost { color: #fff; border: 1px solid rgba(255,255,255,.4); }
+  .btn.ghost:hover { background: rgba(255,255,255,.1); }
+  .meta { margin-top: 18px; font-size: 14px; color: rgba(255,255,255,.7); }
+
+  /* ---------- Mock window (illustration) ---------- */
+  figure.shot { margin: 0 auto; max-width: 1040px; position: relative; top: 1px; }
+  figure.shot figcaption { text-align: center; font-size: 13px; color: rgba(255,255,255,.6); margin: 0 0 12px; }
+  .win {
+    background: var(--win); color: var(--win-text);
+    border-radius: 14px 14px 0 0; box-shadow: var(--shadow);
+    border: 1px solid var(--win-line); border-bottom: 0;
+    font-size: 13px; line-height: 1.2; overflow: hidden;
+    display: grid; grid-template-columns: 200px 1fr;
+    text-align: left;
+  }
+  .side { background: var(--win-side); border-right: 1px solid var(--win-line); padding: 12px 10px 16px; }
+  .lights { display: flex; gap: 8px; margin: 2px 4px 18px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .side h4 { margin: 12px 6px 6px; font-size: 11px; color: var(--win-muted); font-weight: 600; }
+  .s-item { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px; }
+  .s-item.on { background: var(--sel-dim); }
+  .s-item svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+  .s-drive { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 7px; align-items: center; padding: 6px; border-radius: 6px; }
+  .s-drive.on { background: var(--sel-dim); }
+  .s-drive svg { width: 16px; height: 16px; color: var(--win-muted); grid-row: span 3; align-self: start; margin-top: 1px; }
+  .s-drive .eject { grid-row: 1; grid-column: 3; color: var(--win-muted); font-size: 10px; }
+  .cap { grid-column: 2 / 4; height: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .cap b { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .s-drive small { grid-column: 2 / 4; font-size: 10px; color: var(--win-muted); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .tool { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--win-bar); border-bottom: 1px solid var(--win-line); }
+  .nav2 { display: flex; gap: 2px; color: var(--win-muted); font-size: 15px; }
+  .nav2 span { padding: 0 5px; }
+  .ttl { font-weight: 700; font-size: 14px; }
+  .ttl small { font-weight: 400; color: var(--win-muted); margin-left: 6px; font-size: 11px; }
+  .tool .sp { flex: 1; }
+  .seg { display: flex; border: 1px solid var(--win-line); border-radius: 7px; overflow: hidden; }
+  .seg span { padding: 3px 9px; color: var(--win-muted); }
+  .seg span.on { background: var(--sel-dim); color: var(--win-text); }
+  .search { border: 1px solid var(--win-line); border-radius: 7px; padding: 4px 10px; color: var(--win-muted); width: 150px; background: var(--win); }
+
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-height: 300px; }
+  .col { border-right: 1px solid var(--win-line); padding: 6px; min-width: 0; }
+  .col:last-child { border-right: 0; }
+  .row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 30px 52px 8px; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; }
+  .row .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .z { text-align: right; color: var(--win-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .row .chev { color: var(--win-muted); font-size: 10px; }
+  .row svg { width: 16px; height: 16px; }
+  .bar { height: 4px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .bar b { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .row.dim { background: var(--sel-dim); }
+  .row.sel { background: var(--sel); color: #fff; }
+  .row.sel .z, .row.sel .chev { color: rgba(255,255,255,.85); }
+  .row.sel .bar { background: rgba(255,255,255,.3); }
+  .row.sel .bar b { background: #fff; }
+  .ic-folder { color: #4aa3f0; }
+  .ic-doc { color: var(--win-muted); }
+  .pathbar { border-top: 1px solid var(--win-line); padding: 5px 12px; font-size: 11px; color: var(--win-muted); white-space: nowrap; overflow: hidden; }
+  .status { border-top: 1px solid var(--win-line); padding: 6px 12px; font-size: 11px; color: var(--win-muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 84px 0; }
+  section.alt { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  h2 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.015em; margin: 0 0 12px; line-height: 1.15; }
+  .sub { color: var(--muted); max-width: 720px; margin: 0 0 40px; font-size: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  .card h3 { margin: 12px 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .glyph {
+    width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+  }
+  .glyph svg { width: 22px; height: 22px; }
+
+  .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: start; }
+  ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  ul.checks li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; }
+  ul.checks li::before {
+    content: "✓"; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 700; font-size: 13px;
+  }
+  ul.checks strong { display: block; }
+  ul.checks span { color: var(--muted); font-size: 15.5px; }
+
+  table.sizes { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  table.sizes th, table.sizes td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.sizes tr:last-child td { border-bottom: 0; }
+  table.sizes th { font-size: 13px; color: var(--muted); font-weight: 600; background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .9em; }
+  table.sizes td:first-child { width: 34%; }
+  table.sizes td code { white-space: nowrap; }
+  td code, p code, li code { background: color-mix(in srgb, var(--accent) 10%, transparent); padding: 1px 5px; border-radius: 5px; }
+
+  .bench { display: grid; gap: 14px; margin-top: 28px; }
+  .bench .lbl { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .bench .track { height: 14px; border-radius: 8px; background: var(--line); overflow: hidden; }
+  .bench .fill { height: 100%; border-radius: 8px; }
+  .bench .fill.old { width: 100%; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+  .bench .fill.new { width: 33%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .note { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+
+  pre.code {
+    background: var(--code-bg); color: var(--code-text); padding: 20px 22px; border-radius: 14px;
+    overflow-x: auto; font-size: 14.5px; line-height: 1.6; margin: 0 0 16px;
+  }
+  pre.code .c { color: #9b97c9; }
+  .steps { display: grid; gap: 22px; }
+  .callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--card); border-radius: 12px; padding: 16px 18px; color: var(--muted); font-size: 15.5px; }
+  .callout strong { color: var(--text); }
+
+  footer { padding: 40px 0 56px; color: var(--muted); font-size: 14.5px; border-top: 1px solid var(--line); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; }
+  footer .brand { color: var(--text); font-size: 16px; }
+  footer .brand img { width: 24px; height: 24px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .split { grid-template-columns: 1fr; gap: 32px; }
+    .win { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cols .col:first-child { display: none; }
+  }
+  @media (max-width: 600px) {
+    nav.top ul { display: none; }
+    .grid { grid-template-columns: 1fr; }
+    .cols { grid-template-columns: 1fr; }
+    .cols .col:nth-child(2) { display: none; }
+    .search, .seg { display: none; }
+    section { padding: 60px 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn { transition: background .15s ease; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- Inline SVG symbols (no external requests) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-folder" viewBox="0 0 24 24"><path fill="currentColor" d="M2 6.5A2.5 2.5 0 0 1 4.5 4h4.6l2 2.2h8.4A2.5 2.5 0 0 1 22 8.7v9.8a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5z"/><path fill="#fff" opacity=".28" d="M2 9h20v1.2H2z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6 2.8h8l4.2 4.2v14.2H6z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M14 2.8V7h4.2"/></symbol>
+  <symbol id="i-drive" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.5" cy="12" r="1.3" fill="currentColor"/><path d="M5.5 12h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-house" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3.5 11 12 4l8.5 7M6 9.5V20h4.5v-5h3v5H18V9.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v8m-3.5-3.5L12 15.5l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></g></symbol>
+  <symbol id="i-books" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 4.5h4v15H4zM9.5 4.5h4v15h-4z"/><path d="m15 5.4 3.8-1 3.2 14.3-3.8 1z"/></g></symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M9 4.5v15M15 4.5v15"/></g></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M13.2 2 4.5 13.4h6.1L9.6 22l9-12.2h-6.2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></g></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v17M7 20.5h10M5 7h14"/><path d="M5 7 2.5 13a3 3 0 0 0 5 0zM19 7l-2.5 6a3 3 0 0 0 5 0z"/></g></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6 6.5l1 14h10l1-14M10 10.5v6.5M14 10.5v6.5"/></g></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M12 3 4.5 6v5.5c0 4.6 3.1 8.3 7.5 9.5 4.4-1.2 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.3 2.3 4.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+</svg>
+
+<header class="hero">
+  <div class="wrap">
+    <nav class="top" aria-label="Primary">
+      <a class="brand" href="#top" id="top"><img src="icon.png" alt="" width="32" height="32">DiskScope</a>
+      <ul>
+        <li><a class="navlink" href="#features">Features</a></li>
+        <li><a class="navlink" href="#how">How it measures</a></li>
+        <li><a class="navlink" href="#privacy">Privacy &amp; safety</a></li>
+        <li><a class="navlink" href="#install">Install</a></li>
+        <li><a class="navlink" href="https://github.com/steveo-ocheng/DiskScope">GitHub</a></li>
+      </ul>
+    </nav>
+
+    <div class="hero-body">
+      <img class="appicon" src="icon.png" width="132" height="132"
+           alt="DiskScope app icon: a magnifying glass over a colorful disk-usage ring chart">
+      <h1>See what's using your disk.</h1>
+      <p class="lede">DiskScope is a fast, native macOS disk-usage browser — the power of <code>ncdu</code>
+        with the Finder interface you already know. Pick any drive or folder and drill straight to what's taking up space.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Build &amp; install</a>
+        <a class="btn ghost" href="https://github.com/steveo-ocheng/DiskScope">
+          <svg width="18" height="18" aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
+      </div>
+      <p class="meta">Free · macOS 14 Sonoma or later · Apple silicon &amp; Intel</p>
+    </div>
+
+    <figure class="shot">
+      <figcaption>Illustration of the DiskScope window (sizes are examples)</figcaption>
+      <div class="win" aria-hidden="true">
+        <aside class="side">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <h4>Locations</h4>
+          <div class="s-drive on">
+            <svg><use href="#i-drive"/></svg><span>Macintosh HD</span><span></span>
+            <div class="cap"><b style="width:62%"></b></div>
+            <small>380 GB free of 994 GB</small>
+          </div>
+          <div class="s-drive">
+            <svg><use href="#i-drive"/></svg><span>Backup SSD</span><span class="eject">⏏</span>
+            <div class="cap"><b style="width:41%"></b></div>
+            <small>1.18 TB free of 2 TB</small>
+          </div>
+          <h4>Favorites</h4>
+          <div class="s-item"><svg><use href="#i-house"/></svg>Home</div>
+          <div class="s-item"><svg><use href="#i-doc"/></svg>Documents</div>
+          <div class="s-item"><svg><use href="#i-down"/></svg>Downloads</div>
+          <div class="s-item"><svg><use href="#i-apps"/></svg>Applications</div>
+          <div class="s-item"><svg><use href="#i-books"/></svg>Library</div>
+        </aside>
+        <div class="main">
+          <div class="tool">
+            <div class="nav2"><span>‹</span><span>›</span></div>
+            <div class="ttl">Library<small>212 GB</small></div>
+            <div class="sp"></div>
+            <div class="seg"><span>☰</span><span class="on">▥</span></div>
+            <div class="search">⌕ Search</div>
+          </div>
+          <div class="cols">
+            <div class="col">
+              <div class="row dim"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Library</span><div class="bar"><b style="width:58%"></b></div><span class="z">212 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Movies</span><div class="bar"><b style="width:16%"></b></div><span class="z">58.4 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Documents</span><div class="bar"><b style="width:9%"></b></div><span class="z">33.1 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Downloads</span><div class="bar"><b style="width:7%"></b></div><span class="z">24.9 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Pictures</span><div class="bar"><b style="width:5%"></b></div><span class="z">18.2 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">projects</span><div class="bar"><b style="width:2%"></b></div><span class="z">7.6 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Desktop</span><div class="bar"><b style="width:1%"></b></div><span class="z">2.3 GB</span><span class="chev">›</span></div>
+            </div>
+            <div class="col">
+              <div class="row dim"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Mail</span><div class="bar"><b style="width:34%"></b></div><span class="z">72.5 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Application Support</span><div class="bar"><b style="width:19%"></b></div><span class="z">41.0 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Containers</span><div class="bar"><b style="width:12%"></b></div><span class="z">25.3 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Caches</span><div class="bar"><b style="width:8%"></b></div><span class="z">17.8 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Developer</span><div class="bar"><b style="width:6%"></b></div><span class="z">12.4 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Group Containers</span><div class="bar"><b style="width:4%"></b></div><span class="z">9.1 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">Photos</span><div class="bar"><b style="width:2%"></b></div><span class="z">4.7 GB</span><span class="chev">›</span></div>
+            </div>
+            <div class="col">
+              <div class="row sel"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">V10</span><div class="bar"><b style="width:96%"></b></div><span class="z">69.8 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-folder"><use href="#i-folder"/></svg><span class="n">MailData</span><div class="bar"><b style="width:3%"></b></div><span class="z">2.4 GB</span><span class="chev">›</span></div>
+              <div class="row"><svg class="ic-doc"><use href="#i-doc"/></svg><span class="n">Envelope Index</span><div class="bar"><b style="width:1%"></b></div><span class="z">286 MB</span><span class="chev"></span></div>
+              <div class="row"><svg class="ic-doc"><use href="#i-doc"/></svg><span class="n">Signatures.plist</span><div class="bar"><b style="width:0%"></b></div><span class="z">8 KB</span><span class="chev"></span></div>
+            </div>
+          </div>
+          <div class="pathbar">Macintosh HD › Users › you › Library › Mail › V10</div>
+          <div class="status">4 items, 72.5 GB on disk (1,204,311 total), 380 GB available on Macintosh HD</div>
+        </div>
+      </div>
+    </figure>
+  </div>
+</header>
+
+<main id="main">
+  <section id="features">
+    <div class="wrap">
+      <h2>Everything you need to reclaim space</h2>
+      <p class="sub">Like <code>ncdu</code> or <code>du</code>, but you browse the results the way you browse your Mac.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-drive"/></svg></div>
+          <h3>Pick any drive or folder</h3>
+          <p>The sidebar lists every mounted drive — internal, external, USB and network — with used and free space,
+            plus your favorite folders. Click one to scan it, eject drives in place, or drop any folder on the window.</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-columns"/></svg></div>
+          <h3>Finder-style browsing</h3>
+          <p>Column and list views with sizes and usage bars on every row, back/forward history, a clickable path bar,
+            and the keyboard shortcuts you expect (⌘[ ⌘] ⌘↑ ⌘2 ⌘3).</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-bolt"/></svg></div>
+          <h3>Fast, parallel scanner</h3>
+          <p>A multi-threaded scanner walks the disk on several cores — about 3× faster than a single-threaded walk
+            on a 3-million-item folder — with live progress you can cancel at any time.</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-search"/></svg></div>
+          <h3>Search the whole scan</h3>
+          <p>Type a name to search everything that was scanned (or just the current folder). Matches are listed largest
+            first, so the big offenders surface immediately.</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-scale"/></svg></div>
+          <h3>Disk usage vs. file size</h3>
+          <p>Switch between space actually allocated on disk and the apparent (logical) size — the difference reveals
+            compressed, sparse and tiny files. Sort by size, name, item count or date.</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-trash"/></svg></div>
+          <h3>Clean up with confidence</h3>
+          <p>Move items to the Trash, show them in Finder or copy their paths. Rescan just the folder you're in after
+            changes — totals update all the way up.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="alt">
+    <div class="wrap split">
+      <div>
+        <h2>Numbers you can trust</h2>
+        <p class="sub" style="margin-bottom:24px">DiskScope reads sizes straight from the file system, the same way <code>du</code> does —
+          and its totals match <code>du</code> exactly.</p>
+        <ul class="checks">
+          <li><div><strong>Metadata only</strong><span>Each folder is listed with <code>readdir</code> and every entry is
+            measured with <code>fstatat</code>. Files are never opened or read.</span></div></li>
+          <li><div><strong>Symlinks are never followed</strong><span>A link counts as the link itself, so nothing is
+            counted twice and scans can't wander off into other places.</span></div></li>
+          <li><div><strong>Hard links counted once</strong><span>Files with several names share one inode; DiskScope counts
+            that storage a single time, like <code>du</code>.</span></div></li>
+          <li><div><strong>No double counting on the startup disk</strong><span>When scanning <code>/</code>, the system's
+            duplicate view of your data volume and other mounted disks are skipped.</span></div></li>
+        </ul>
+      </div>
+      <div>
+        <table class="sizes">
+          <caption class="skip">Two size measurements DiskScope can show</caption>
+          <thead><tr><th scope="col">Size</th><th scope="col">What it measures</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Disk usage</strong><br><code>st_blocks × 512</code></td><td>Space actually allocated on disk. The default — it's what you get back by deleting.</td></tr>
+            <tr><td><strong>Apparent size</strong><br><code>st_size</code></td><td>The file's logical length. Can be larger (compressed or sparse files) or smaller (tiny files still use a whole block).</td></tr>
+          </tbody>
+        </table>
+        <div class="bench" role="img" aria-label="Benchmark: scanning a 3.06 million item folder took 75.6 seconds single-threaded versus 24.7 seconds with DiskScope's parallel scanner.">
+          <div>
+            <div class="lbl"><span>Single-threaded walk</span><span>75.6 s</span></div>
+            <div class="track"><div class="fill old"></div></div>
+          </div>
+          <div>
+            <div class="lbl"><span>DiskScope parallel scanner</span><span>24.7 s</span></div>
+            <div class="track"><div class="fill new"></div></div>
+          </div>
+        </div>
+        <p class="note">Scanning a 3.06-million-item folder, warm cache, on one Mac. Your results will vary with disk and CPU.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap split">
+      <div>
+        <h2>Private by design. Careful with your files.</h2>
+        <p class="sub" style="margin-bottom:0">DiskScope has no network code at all. Nothing is uploaded, nothing is
+          tracked, and scanning never changes anything on disk.</p>
+      </div>
+      <ul class="checks">
+        <li><div><strong>Read-only scanning</strong><span>Scans only read file metadata. The only thing that changes files is
+          Move to Trash — and only when you confirm it.</span></div></li>
+        <li><div><strong>Protected locations</strong><span>System folders, top-level folders like your home, Library and
+          Applications, and whole drives can't be sent to the Trash.</span></div></li>
+        <li><div><strong>Re-checked before every move</strong><span>Right before trashing, each item is verified to still be the
+          same kind of item at the same real location — if anything changed since the scan, DiskScope refuses.</span></div></li>
+        <li><div><strong>Clear confirmation</strong><span>The prompt lists full paths, with invisible or direction-reversing
+          characters made visible so a file name can't disguise itself. Items go to the Trash, so you can still put them back.</span></div></li>
+        <li><div><strong>Hardened Runtime</strong><span>Built with Apple's Hardened Runtime and no special entitlements.</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="install" class="alt">
+    <div class="wrap split">
+      <div>
+        <h2>Build &amp; install</h2>
+        <p class="sub" style="margin-bottom:20px">There's no notarized download yet, so for now DiskScope is built from source.
+          It takes a minute and needs only Apple's free Command Line Tools — no Xcode project.</p>
+        <div class="callout"><strong>Requirements:</strong> macOS 14 Sonoma or later, on Apple silicon or Intel.
+          Install the tools with <code>xcode-select --install</code> if you don't have them.</div>
+      </div>
+      <div class="steps">
+        <pre class="code"><code><span class="c"># Build a universal app and install it in /Applications</span>
+git clone https://github.com/steveo-ocheng/DiskScope.git
+cd DiskScope
+./build-app.sh --install</code></pre>
+        <div class="callout"><strong>Optional — complete results:</strong> macOS keeps some folders (like Mail and Messages)
+          private. To include them, add DiskScope under System Settings › Privacy &amp; Security › Full Disk Access, then
+          rescan. The orange “unreadable” note in DiskScope's status bar opens that page for you.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="icon.png" alt="" width="24" height="24">DiskScope</a>
+    <span>Source code on <a href="https://github.com/steveo-ocheng/DiskScope">GitHub</a> · Issues welcome</span>
+  </div>
+</footer>
+</body>
+</html>

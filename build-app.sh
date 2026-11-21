@@ -15,6 +15,8 @@ VERSION="${VERSION:-1.0.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
+[[ "$VERSION" =~ '^[0-9]+(\.[0-9]+){0,2}$' ]] || { echo "VERSION must look like 1.2.3 (got '$VERSION')" >&2; exit 2; }
+[[ "$BUILD_NUMBER" =~ '^[0-9]+(\.[0-9]+)*$' ]] || { echo "BUILD_NUMBER must be numeric (got '$BUILD_NUMBER')" >&2; exit 2; }
 INSTALL=0; DMG=0
 for arg in "$@"; do
   case "$arg" in
