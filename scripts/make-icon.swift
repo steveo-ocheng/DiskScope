@@ -4,10 +4,11 @@
 //   ICON_PREVIEW_DIR=/some/dir swift scripts/make-icon.swift   also writes preview PNGs
 //   ICON_DOCS=1 swift scripts/make-icon.swift            also refreshes docs/icon.png + docs/favicon-32.png
 //
-// A ringed planet in deep space: the rings double as a disk platter (fine grooves) and as
-// usage rings (one pale-cyan arc), nodding to the app's sunburst view. Mostly monochrome
-// silvers and steel blues. Pure CoreGraphics + ImageIO, so it runs headless. Star positions
-// come from a fixed-seed generator, so the output is reproducible.
+// A sci-fi disk scanner: a machined gunmetal device whose black-glass face shows a disk platter
+// under a holographic HUD — a segmented usage gauge, tick rings, targeting brackets and a radar
+// sweep that has just locked onto something (the one amber pip). One emissive colour family
+// (cyan/teal) plus that amber accent. Detail is reduced per size so 16/32 px keep a bold
+// silhouette. Pure CoreGraphics + ImageIO, so it runs headless; deterministic output.
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -23,16 +24,6 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
 
 func gradient(_ colors: [CGColor], _ locs: [CGFloat]? = nil) -> CGGradient {
     CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locs)!
-}
-
-/// Deterministic PRNG (64-bit LCG) so the star field never changes between runs.
-struct SeededRandom {
-    var state: UInt64
-    mutating func next() -> CGFloat {
-        state = state &* 6364136223846793005 &+ 1442695040888963407
-        return CGFloat(Double(state >> 11) / Double(1 << 53))
-    }
-    mutating func range(_ lo: CGFloat, _ hi: CGFloat) -> CGFloat { lo + (hi - lo) * next() }
 }
 
 /// macOS-style squircle (superellipse) filling `rect`.
@@ -53,334 +44,445 @@ func squircle(_ rect: CGRect, exponent n: CGFloat = 4.4) -> CGPath {
 
 func circle(_ c: CGPoint, _ r: CGFloat) -> CGRect { CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r) }
 
+func polar(_ r: CGFloat, _ a: CGFloat) -> CGPoint { CGPoint(x: C.x + r * cos(a), y: C.y + r * sin(a)) }
+
+func deg(_ d: CGFloat) -> CGFloat { d * .pi / 180 }
+
+/// Ring sector between radii r0…r1 from angle a0 to a1 (radians, counter-clockwise, y up).
+func sector(_ r0: CGFloat, _ r1: CGFloat, _ a0: CGFloat, _ a1: CGFloat) -> CGPath {
+    let p = CGMutablePath()
+    p.addArc(center: C, radius: r1, startAngle: a0, endAngle: a1, clockwise: false)
+    p.addArc(center: C, radius: r0, startAngle: a1, endAngle: a0, clockwise: true)
+    p.closeSubpath()
+    return p
+}
+
+func ring(_ r0: CGFloat, _ r1: CGFloat) -> CGPath {
+    let p = CGMutablePath()
+    p.addEllipse(in: circle(C, r1))
+    p.addEllipse(in: circle(C, r0))
+    return p
+}
+
 /// Level of detail: 0 = 16/32 px (bold silhouette), 1 = 64–128 px, 2 = 256 px and up.
 func detailLevel(px: Int) -> Int { px <= 32 ? 0 : (px <= 128 ? 1 : 2) }
 
-// MARK: - Scene geometry (1024-unit canvas, origin bottom-left)
+// MARK: - Palette and geometry (1024-unit canvas, origin bottom-left)
 
+let C = CGPoint(x: 512, y: 512)
 let body = CGRect(x: 100, y: 100, width: 824, height: 824)
-let planetCenter = CGPoint(x: 506, y: 508)
-let tilt: CGFloat = 0.36          // ring plane rotation (radians, counter-clockwise)
-var squash: CGFloat = 0.30        // ring ellipse height / width (viewing angle); opened up at tiny sizes
-let lightDir = CGPoint(x: -0.62, y: 0.78) // towards the light: upper left
+let cyan: UInt32 = 0x46EEFF       // emissive HUD colour
+let cyanHot: UInt32 = 0xD8FCFF    // overexposed core of the glow
+let teal: UInt32 = 0x0B8FA3       // dim HUD elements
+let amber: UInt32 = 0xFFB238      // the single warm accent: a lock-on
 
-struct Band { let r0: CGFloat; let r1: CGFloat; let inner: UInt32; let outer: UInt32; let alpha: CGFloat }
-
-func drawBackground(_ ctx: CGContext, detail: Int, unit: CGFloat) {
-    // Deep space: navy at the top falling to near-black.
-    ctx.drawLinearGradient(gradient([rgb(0x16204A), rgb(0x0A1030), rgb(0x04060F)], [0, 0.55, 1]),
-                           start: CGPoint(x: 380, y: 924), end: CGPoint(x: 640, y: 100),
-                           options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-    // Nebula haze: a cool violet bloom upper right, a steel-teal one lower left.
-    ctx.drawRadialGradient(gradient([rgb(0x5A4FA8, 0.42), rgb(0x3A2F7A, 0.16), rgb(0x3A2F7A, 0)], [0, 0.45, 1]),
-                           startCenter: CGPoint(x: 760, y: 790), startRadius: 0,
-                           endCenter: CGPoint(x: 760, y: 790), endRadius: 470, options: [])
-    ctx.drawRadialGradient(gradient([rgb(0x1E5C80, 0.30), rgb(0x1E5C80, 0)]),
-                           startCenter: CGPoint(x: 230, y: 250), startRadius: 0,
-                           endCenter: CGPoint(x: 230, y: 250), endRadius: 420, options: [])
-    // A faint milky band running diagonally behind the planet.
-    ctx.saveGState()
-    ctx.translateBy(x: 512, y: 512)
-    ctx.rotate(by: -0.62)
-    ctx.scaleBy(x: 1, y: 0.22)
-    ctx.drawRadialGradient(gradient([rgb(0xB9C8F0, 0.13), rgb(0xB9C8F0, 0)]),
-                           startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 620, options: [])
-    ctx.restoreGState()
-
-    guard detail > 0 else {
-        // Two bright points keep a hint of space at 16/32 px without becoming noise.
-        for (p, r) in [(CGPoint(x: 230, y: 800), CGFloat(15)), (CGPoint(x: 820, y: 255), CGFloat(12))] {
-            ctx.setFillColor(rgb(0xE6EEFF, 0.9))
-            ctx.fillEllipse(in: circle(p, r))
+/// Per-size geometry. Tiny renders enlarge the platter and thicken every stroke.
+struct Layout {
+    let platter: CGFloat          // platter radius
+    let gauge: (CGFloat, CGFloat) // segmented usage gauge band
+    let ticks: (CGFloat, CGFloat) // tick ring band
+    let hub: CGFloat              // spindle radius
+    let sweepLead: CGFloat        // radar sweep leading edge angle
+    let sweepSpan: CGFloat        // how far the sweep's afterglow trails
+    let gaugeFill: CGFloat        // fraction of the gauge lit
+    init(detail: Int) {
+        if detail == 0 {
+            platter = 262; gauge = (290, 362); ticks = (0, 0); hub = 92
+        } else {
+            platter = 246; gauge = (276, 300); ticks = (314, 328); hub = 62
         }
-        return
-    }
-
-    // Star field, sized in device pixels so it stays crisp at every icon size.
-    var rnd = SeededRandom(state: 0xD15C5C0DE)
-    // Fewer stars as the icon shrinks, so smaller renders don't turn into speckle.
-    let count = detail == 2 ? (unit <= 2 ? 170 : 90) : 26
-    for _ in 0..<count {
-        let p = CGPoint(x: rnd.range(105, 919), y: rnd.range(105, 919))
-        let bright = rnd.next()
-        let rPx = detail == 2 ? 0.45 + 1.2 * pow(bright, 3) : 0.5 + 0.45 * pow(bright, 2)
-        let alpha = (detail == 2 ? 0.2 : 0.25) + 0.6 * pow(bright, 1.5)
-        let tint: UInt32 = rnd.next() < 0.18 ? 0xC9D8FF : (rnd.next() < 0.1 ? 0xFFF1DC : 0xFFFFFF)
-        ctx.setFillColor(rgb(tint, alpha))
-        ctx.fillEllipse(in: circle(p, rPx * unit))
-    }
-
-    // A few hero stars with a soft glow and four-point diffraction spikes.
-    let heroes: [(CGPoint, CGFloat)] = [
-        (CGPoint(x: 236, y: 792), 1.0), (CGPoint(x: 812, y: 262), 0.8),
-        (CGPoint(x: 838, y: 708), 0.55), (CGPoint(x: 178, y: 390), 0.45),
-    ]
-    for (p, s) in heroes {
-        ctx.drawRadialGradient(gradient([rgb(0xDCE8FF, 0.55 * s), rgb(0x9DB8FF, 0.12 * s), rgb(0x9DB8FF, 0)], [0, 0.35, 1]),
-                               startCenter: p, startRadius: 0, endCenter: p, endRadius: 46 * s, options: [])
-        let len = 64 * s + 10, w = max(2.2 * s, 1.1 * unit)
-        for angle in [0, CGFloat.pi / 2] {
-            ctx.saveGState()
-            ctx.translateBy(x: p.x, y: p.y)
-            ctx.rotate(by: angle + 0.08)
-            ctx.clip(to: CGRect(x: -len, y: -w / 2, width: 2 * len, height: w))
-            ctx.drawLinearGradient(gradient([rgb(0xFFFFFF, 0), rgb(0xFFFFFF, 0.85 * s), rgb(0xFFFFFF, 0)]),
-                                   start: CGPoint(x: -len, y: 0), end: CGPoint(x: len, y: 0), options: [])
-            ctx.restoreGState()
-        }
-        ctx.setFillColor(rgb(0xFFFFFF))
-        ctx.fillEllipse(in: circle(p, max(3.2 * s, 1.2 * unit)))
+        sweepLead = deg(52); sweepSpan = deg(detail == 0 ? 80 : 95); gaugeFill = 0.72
     }
 }
 
-/// Moves the context into the ring plane: origin at the planet, x along the ring's long axis.
-/// Callers apply `scaleBy(1, squash)` themselves when drawing ring ellipses.
-func enterRingSpace(_ ctx: CGContext) {
-    ctx.translateBy(x: planetCenter.x, y: planetCenter.y)
-    ctx.rotate(by: tilt)
-}
+// MARK: - Layers
 
-func ringBands(detail: Int) -> [Band] {
-    if detail == 0 {
-        return [Band(r0: 232, r1: 312, inner: 0xF2F5FA, outer: 0xC3CCDB, alpha: 1),
-                Band(r0: 326, r1: 372, inner: 0xAEB8CA, outer: 0x8994AA, alpha: 1)]
-    }
-    return [
-        Band(r0: 212, r1: 236, inner: 0x6F7C96, outer: 0x8A97B0, alpha: 0.55),   // faint inner (C) ring
-        Band(r0: 240, r1: 306, inner: 0xF4F7FC, outer: 0xC2CBDA, alpha: 1),      // bright main (B) ring
-        Band(r0: 318, r1: 360, inner: 0xB4BED0, outer: 0x8691A8, alpha: 1),      // outer (A) ring
-        Band(r0: 370, r1: 375, inner: 0xC9D3E4, outer: 0xC9D3E4, alpha: 0.5),    // thin outermost ring
-    ]
-}
-
-/// Draws the rings' far half (`front == false`, behind the planet) or near half (over it).
-func drawRings(_ ctx: CGContext, front: Bool, detail: Int, unit: CGFloat) {
-    ctx.saveGState()
-    enterRingSpace(ctx)
-    // Half-plane: the far side of the ring is above the long axis, the near side below it.
-    ctx.clip(to: front ? CGRect(x: -500, y: -500, width: 1000, height: 500)
-                       : CGRect(x: -500, y: 0, width: 1000, height: 500))
-    ctx.scaleBy(x: 1, y: squash)
-
-    for band in ringBands(detail: detail) {
-        ctx.saveGState()
-        let annulus = CGMutablePath()
-        annulus.addEllipse(in: circle(.zero, band.r1))
-        annulus.addEllipse(in: circle(.zero, band.r0))
-        ctx.addPath(annulus)
-        ctx.clip(using: .evenOdd)
-        ctx.setAlpha(band.alpha)
-        ctx.drawRadialGradient(gradient([rgb(band.inner), rgb(band.outer)]),
-                               startCenter: .zero, startRadius: band.r0, endCenter: .zero, endRadius: band.r1,
-                               options: [])
-        if detail == 2 {
-            // Platter grooves: hairline concentric rings of alternating light and shade.
-            var r = band.r0 + 3
-            var i = 0
-            while r < band.r1 - 1 {
-                ctx.setStrokeColor(i % 2 == 0 ? rgb(0xFFFFFF, 0.16) : rgb(0x1A2238, 0.16))
-                ctx.setLineWidth(1.4 * unit / squash * 0.55)
-                ctx.strokeEllipse(in: circle(.zero, r))
-                r += 4.5
-                i += 1
-            }
+/// Machined gunmetal tile with a bevelled frame around a black-glass face.
+func drawChassis(_ ctx: CGContext, detail: Int, unit: CGFloat) {
+    // Frame: brushed gunmetal, lit from the top left.
+    ctx.drawLinearGradient(gradient([rgb(0x56616D), rgb(0x2A323B), rgb(0x161B21), rgb(0x0C1014)], [0, 0.35, 0.7, 1]),
+                           start: CGPoint(x: 180, y: 940), end: CGPoint(x: 840, y: 90), options: [])
+    if detail == 2 {
+        // Fine horizontal brushing on the frame.
+        var y: CGFloat = 100
+        var i = 0
+        while y < 924 {
+            ctx.setFillColor(i % 3 == 0 ? rgb(0xFFFFFF, 0.025) : rgb(0x000000, 0.03))
+            ctx.fill(CGRect(x: 100, y: y, width: 824, height: max(unit, 1.2)))
+            y += max(unit * 2, 3.1)
+            i += 1
         }
-        // Light falls from the left: shade the ring towards the right.
-        ctx.setAlpha(1)
-        ctx.drawLinearGradient(gradient([rgb(0xFFFFFF, 0.16), rgb(0x000000, 0), rgb(0x05070F, 0.42)], [0, 0.45, 1]),
-                               start: CGPoint(x: -380, y: 0), end: CGPoint(x: 380, y: 0), options: [])
-        ctx.restoreGState()
     }
+    let inset: CGFloat = detail == 0 ? 30 : 34
+    let face = squircle(body.insetBy(dx: inset, dy: inset), exponent: 4.6)
 
-    if !front {
-        // The planet's shadow falls on the far ring, behind and to the right of the planet.
-        ctx.saveGState()
-        let shadow = CGMutablePath()
-        shadow.addEllipse(in: circle(.zero, 380))
-        ctx.addPath(shadow)
-        ctx.clip()
-        ctx.scaleBy(x: 1, y: 1 / squash)       // back to ring-plane space for a round shadow
-        let c = CGPoint(x: 64, y: 10)
-        ctx.drawRadialGradient(gradient([rgb(0x03050C, 0.62), rgb(0x03050C, 0.62), rgb(0x03050C, 0)], [0, 0.78, 1]),
-                               startCenter: c, startRadius: 0, endCenter: c, endRadius: 196, options: [])
-        ctx.restoreGState()
-    } else {
-        // Usage arc: a pale-cyan segment on the outer ring, like the app's sunburst rings.
-        let r0: CGFloat = detail == 0 ? 326 : 318, r1: CGFloat = detail == 0 ? 372 : 360
-        let arc = CGMutablePath()
-        let a0: CGFloat = .pi * 1.06, a1: CGFloat = .pi * 1.52
-        arc.addArc(center: .zero, radius: r1, startAngle: a0, endAngle: a1, clockwise: false)
-        arc.addArc(center: .zero, radius: r0, startAngle: a1, endAngle: a0, clockwise: true)
-        arc.closeSubpath()
-        ctx.saveGState()
-        ctx.addPath(arc)
-        ctx.clip()
-        ctx.drawRadialGradient(gradient([rgb(0xC8F4FF), rgb(0x6FD3F5)]),
-                               startCenter: .zero, startRadius: r0, endCenter: .zero, endRadius: r1, options: [])
-        if detail == 2 {
-            var r = r0 + 3
-            while r < r1 - 1 {
-                ctx.setStrokeColor(rgb(0xFFFFFF, 0.18))
-                ctx.setLineWidth(1.4 * unit / squash * 0.55)
-                ctx.strokeEllipse(in: circle(.zero, r))
-                r += 9
-            }
-        }
-        ctx.restoreGState()
-    }
-    ctx.restoreGState()
-
-    if front {
-        // Soft glow around the cyan arc (drawn unclipped, beneath nothing else).
-        ctx.saveGState()
-        enterRingSpace(ctx)
-        ctx.clip(to: CGRect(x: -500, y: -500, width: 1000, height: 500))
-        ctx.scaleBy(x: 1, y: squash)
-        let glow = CGMutablePath()
-        glow.addArc(center: .zero, radius: detail == 0 ? 349 : 339, startAngle: .pi * 1.08, endAngle: .pi * 1.50,
-                    clockwise: false)
-        ctx.setShadow(offset: .zero, blur: 26, color: rgb(0x7FDcFF, detail == 0 ? 0 : 0.85))
-        ctx.setStrokeColor(rgb(0x9BE6FF, detail == 0 ? 0 : 0.30))
-        ctx.setLineWidth(4)
-        ctx.addPath(glow)
-        ctx.strokePath()
-        ctx.restoreGState()
-    }
-}
-
-func drawPlanet(_ ctx: CGContext, detail: Int, unit: CGFloat) {
-    let R: CGFloat = 176
-    let c = planetCenter
-    let hot = CGPoint(x: c.x + lightDir.x * R * 0.45, y: c.y + lightDir.y * R * 0.45)
-
-    // Atmospheric halo.
-    ctx.drawRadialGradient(gradient([rgb(0x9ADFFF, 0), rgb(0x9ADFFF, detail == 0 ? 0.10 : 0.20), rgb(0x9ADFFF, 0)],
-                                    [0, 0.3, 1]),
-                           startCenter: c, startRadius: R * 0.97, endCenter: c, endRadius: R * 1.32, options: [])
-
-    let disc = CGPath(ellipseIn: circle(c, R), transform: nil)
+    // Chamfer: a lit edge on the upper left and a dark one lower right, just outside the face.
     ctx.saveGState()
-    ctx.addPath(disc)
-    ctx.clip()
-    // Sphere shading: a soft hot spot towards the light, falling to steel blue.
-    ctx.drawRadialGradient(gradient([rgb(0xF4F7FC), rgb(0xC4CFDE), rgb(0x8B9AB3), rgb(0x56657F)], [0, 0.3, 0.68, 1]),
-                           startCenter: hot, startRadius: 0, endCenter: c, endRadius: R * 1.08,
-                           options: [.drawsAfterEndLocation])
-    if detail > 0 {
-        // Gas-giant cloud bands, parallel to the rings and curved like latitude lines.
-        ctx.saveGState()
-        enterRingSpace(ctx)
-        let stripes: [(CGFloat, CGFloat, UInt32, CGFloat)] = [
-            (128, 26, 0x2A3552, 0.20), (92, 12, 0xFFFFFF, 0.16), (58, 30, 0x2A3552, 0.16),
-            (18, 14, 0xFFFFFF, 0.12), (-22, 34, 0x2A3552, 0.14), (-70, 14, 0xFFFFFF, 0.10),
-            (-110, 28, 0x2A3552, 0.14), (-150, 12, 0xFFFFFF, 0.08),
-        ]
-        for (y, h, color, a) in stripes {
-            // Soft-edged band parallel to the ring plane.
-            ctx.saveGState()
-            ctx.clip(to: CGRect(x: -R * 1.5, y: y - h, width: R * 3, height: 2 * h))
-            ctx.drawLinearGradient(gradient([rgb(color, 0), rgb(color, a), rgb(color, 0)]),
-                                   start: CGPoint(x: 0, y: y - h), end: CGPoint(x: 0, y: y + h), options: [])
-            ctx.restoreGState()
-        }
-        ctx.restoreGState()
-    }
-    // Night side: everything outside a "lit" disc pushed towards the light, with a short soft edge
-    // so the terminator reads crisp. Gibbous: most of the planet stays lit.
-    let push: CGFloat = detail == 0 ? 0.30 : 0.42
-    let litCenter = CGPoint(x: c.x + lightDir.x * R * push, y: c.y + lightDir.y * R * push)
-    ctx.drawRadialGradient(gradient([rgb(0x04060D, 0), rgb(0x04060D, 0), rgb(0x04060D, detail == 0 ? 0.72 : 0.9)],
-                                    [0, 0.88, 1]),
-                           startCenter: litCenter, startRadius: 0, endCenter: litCenter, endRadius: R * 1.14,
-                           options: [.drawsAfterEndLocation])
-    // The near ring's shadow on the globe: the ring's near half, dropped a little lower.
-    if detail > 0 {
-        ctx.saveGState()
-        enterRingSpace(ctx)
-        ctx.translateBy(x: 0, y: -26)
-        ctx.clip(to: CGRect(x: -500, y: -500, width: 1000, height: 500))
-        ctx.scaleBy(x: 1, y: squash)
-        let shadow = CGMutablePath()
-        shadow.addEllipse(in: circle(.zero, 306))
-        shadow.addEllipse(in: circle(.zero, 240))
-        ctx.addPath(shadow)
-        ctx.setFillColor(rgb(0x04060D, 0.34))
-        ctx.fillPath(using: .evenOdd)
-        ctx.restoreGState()
-    }
-    ctx.restoreGState()
-
-    // Limb lighting: a bright cool rim on the sunlit edge, a faint violet back-scatter on the
-    // night edge so the silhouette never melts into the background.
-    ctx.saveGState()
-    let rim = CGMutablePath()
-    rim.addEllipse(in: circle(c, R))
-    rim.addEllipse(in: circle(c, R - (detail == 0 ? 16 : 7)))
-    ctx.addPath(rim)
+    let chamfer = CGMutablePath()
+    chamfer.addPath(squircle(body.insetBy(dx: inset - 9, dy: inset - 9), exponent: 4.6))
+    chamfer.addPath(face)
+    ctx.addPath(chamfer)
     ctx.clip(using: .evenOdd)
-    let litEdge = CGPoint(x: c.x + lightDir.x * R, y: c.y + lightDir.y * R)
-    let darkEdge = CGPoint(x: c.x - lightDir.x * R, y: c.y - lightDir.y * R)
-    ctx.drawLinearGradient(gradient([rgb(0xD2F4FF, 0.85), rgb(0x8FD8FF, 0.28), rgb(0x8FD8FF, 0), rgb(0x8E8CFF, 0),
-                                     rgb(0x9C98FF, 0.5)], [0, 0.3, 0.55, 0.75, 1]),
-                           start: litEdge, end: darkEdge, options: [])
+    ctx.drawLinearGradient(gradient([rgb(0xC9D4DF, 0.75), rgb(0x6C7884, 0.3), rgb(0x05070A, 0.8)], [0, 0.45, 1]),
+                           start: CGPoint(x: 200, y: 900), end: CGPoint(x: 820, y: 120), options: [])
+    ctx.restoreGState()
+
+    // Black glass face: graphite with a cool cast, slightly lighter at the top.
+    ctx.saveGState()
+    ctx.addPath(face)
+    ctx.clip()
+    ctx.drawLinearGradient(gradient([rgb(0x15202A), rgb(0x0A1016), rgb(0x05080B)], [0, 0.5, 1]),
+                           start: CGPoint(x: 512, y: 900), end: CGPoint(x: 512, y: 120), options: [])
+    // The HUD lights the glass from within.
+    ctx.drawRadialGradient(gradient([rgb(teal, 0.30), rgb(teal, 0.10), rgb(teal, 0)], [0, 0.5, 1]),
+                           startCenter: C, startRadius: 0, endCenter: C, endRadius: 430, options: [])
+    if detail == 2 { drawHexGrid(ctx, unit: unit) }
     ctx.restoreGState()
 }
 
-/// A small moon keeping the planet company (skipped at tiny sizes).
-func drawMoon(_ ctx: CGContext) {
-    let c = CGPoint(x: 292, y: 262), r: CGFloat = 24
-    ctx.drawRadialGradient(gradient([rgb(0xA9C4FF, 0.18), rgb(0xA9C4FF, 0)]),
-                           startCenter: c, startRadius: r, endCenter: c, endRadius: r * 2.2, options: [])
+/// Faint hexagonal micro-grid on the glass, fading out towards the edges.
+func drawHexGrid(_ ctx: CGContext, unit: CGFloat) {
+    let s: CGFloat = 26                  // hex radius
+    let w = s * sqrt(3), h = s * 1.5
+    ctx.setLineWidth(max(unit * 0.8, 1))
+    var row = 0
+    var y: CGFloat = 80
+    while y < 960 {
+        var x: CGFloat = 80 + (row % 2 == 0 ? 0 : w / 2)
+        while x < 960 {
+            let d = hypot(x - C.x, y - C.y)
+            let a = max(0, 0.075 * (1 - d / 470))
+            if a > 0.004 {
+                let p = CGMutablePath()
+                for k in 0..<6 {
+                    let ang = deg(30 + 60 * CGFloat(k))
+                    let pt = CGPoint(x: x + (s - 2) * cos(ang), y: y + (s - 2) * sin(ang))
+                    k == 0 ? p.move(to: pt) : p.addLine(to: pt)
+                }
+                p.closeSubpath()
+                ctx.setStrokeColor(rgb(cyan, a))
+                ctx.addPath(p)
+                ctx.strokePath()
+            }
+            x += w
+        }
+        y += h
+        row += 1
+    }
+}
+
+/// The disk platter: dark anodised metal with machining grooves and a two-lobed sheen.
+func drawPlatter(_ ctx: CGContext, L: Layout, detail: Int, unit: CGFloat) {
+    let R = L.platter
+    // Recess shadow around the platter.
+    ctx.drawRadialGradient(gradient([rgb(0x000000, 0.55), rgb(0x000000, 0)]),
+                           startCenter: C, startRadius: R, endCenter: C, endRadius: R + 34, options: [])
     ctx.saveGState()
-    ctx.addEllipse(in: circle(c, r))
+    ctx.addEllipse(in: circle(C, R))
     ctx.clip()
-    let hot = CGPoint(x: c.x + lightDir.x * r * 0.5, y: c.y + lightDir.y * r * 0.5)
-    ctx.drawRadialGradient(gradient([rgb(0xE9EEF6), rgb(0x9AA6BA), rgb(0x3A4458)], [0, 0.55, 1]),
-                           startCenter: hot, startRadius: 0, endCenter: c, endRadius: r * 1.1,
-                           options: [.drawsAfterEndLocation])
-    let lit = CGPoint(x: c.x + lightDir.x * r * 0.5, y: c.y + lightDir.y * r * 0.5)
-    ctx.drawRadialGradient(gradient([rgb(0x04060D, 0), rgb(0x04060D, 0), rgb(0x04060D, 0.88)], [0, 0.86, 1]),
-                           startCenter: lit, startRadius: 0, endCenter: lit, endRadius: r * 1.18,
-                           options: [.drawsAfterEndLocation])
+    ctx.drawRadialGradient(gradient([rgb(0x26313C), rgb(0x161D25), rgb(0x0B1015)], [0, 0.6, 1]),
+                           startCenter: CGPoint(x: C.x - 40, y: C.y + 50), startRadius: 0,
+                           endCenter: C, endRadius: R, options: [.drawsAfterEndLocation])
+    // Anisotropic sheen of a polished platter: two bright lobes opposite each other.
+    let steps = detail == 0 ? 90 : 360
+    for i in 0..<steps {
+        let a0 = CGFloat(i) / CGFloat(steps) * 2 * .pi
+        let a1 = CGFloat(i + 1) / CGFloat(steps) * 2 * .pi + 0.002
+        let lobe = pow(max(0, cos(2 * ((a0 + a1) / 2 - deg(128)))), 10)
+        if lobe < 0.01 { continue }
+        ctx.setFillColor(rgb(0xC6DCEC, 0.22 * lobe))
+        ctx.addPath(sector(L.hub, R, a0, a1))
+        ctx.fillPath()
+    }
+    if detail > 0 {
+        // Machining grooves.
+        var r = L.hub + 10
+        var i = 0
+        let step: CGFloat = detail == 2 ? max(3, unit * 1.5) : 9
+        ctx.setLineWidth(max(unit * 0.6, 0.8))
+        while r < R - 2 {
+            // Faint, fine and irregular: polished metal, not record grooves.
+            let a: CGFloat = i % 7 == 0 ? 0.05 : 0.018
+            ctx.setStrokeColor(i % 2 == 0 ? rgb(0xFFFFFF, a) : rgb(0x000000, 0.10))
+            ctx.strokeEllipse(in: circle(C, r))
+            r += step
+            i += 1
+        }
+    }
+    ctx.restoreGState()
+    if detail > 0 {
+        // Radar range rings.
+        ctx.saveGState()
+        ctx.setLineWidth(max(unit, 1.5))
+        ctx.setLineDash(phase: 0, lengths: [6, 9])
+        ctx.setStrokeColor(rgb(cyan, 0.16))
+        for f: CGFloat in detail == 2 ? [0.46, 0.74] : [0.6] { ctx.strokeEllipse(in: circle(C, R * f)) }
+        ctx.restoreGState()
+        // The lit gauge reflected in the platter's polished rim (right-hand side).
+        ctx.saveGState()
+        ctx.addPath(ring(R - 16, R - 2))
+        ctx.clip(using: .evenOdd)
+        ctx.drawLinearGradient(gradient([rgb(cyan, 0), rgb(cyan, 0.22)]),
+                               start: CGPoint(x: C.x - R * 0.2, y: C.y), end: CGPoint(x: C.x + R, y: C.y), options: [])
+        ctx.restoreGState()
+    }
+    // Polished platter edge.
+    ctx.setLineWidth(detail == 0 ? 8 : 3)
+    ctx.setStrokeColor(rgb(0x8FA2B4, detail == 0 ? 0.55 : 0.45))
+    ctx.strokeEllipse(in: circle(C, R - 1.5))
+}
+
+/// Radar sweep: an afterglow wedge trailing a bright leading edge.
+func drawSweep(_ ctx: CGContext, L: Layout, detail: Int) {
+    let R = L.platter - 4
+    let steps = detail == 0 ? 40 : 160
+    for i in 0..<steps {
+        let t0 = CGFloat(i) / CGFloat(steps), t1 = CGFloat(i + 1) / CGFloat(steps)
+        let a0 = L.sweepLead - L.sweepSpan * (1 - t0)
+        let a1 = L.sweepLead - L.sweepSpan * (1 - t1) + 0.003
+        let alpha = (detail == 0 ? 0.62 : 0.46) * pow(t1, 2.2)
+        ctx.setFillColor(rgb(cyan, alpha))
+        ctx.addPath(sector(L.hub * 0.6, R, a0, a1))
+        ctx.fillPath()
+    }
+    // Depth: the afterglow fades towards the hub.
+    if detail > 0 {
+        ctx.saveGState()
+        ctx.addPath(sector(L.hub * 0.6, R, L.sweepLead - L.sweepSpan, L.sweepLead + 0.01))
+        ctx.clip()
+        ctx.drawRadialGradient(gradient([rgb(0x05080B, 0.55), rgb(0x05080B, 0)]),
+                               startCenter: C, startRadius: L.hub, endCenter: C, endRadius: R * 0.85, options: [])
+        ctx.restoreGState()
+    }
+    // Leading edge with bloom.
+    ctx.saveGState()
+    ctx.setLineCap(.round)
+    ctx.setShadow(offset: .zero, blur: detail == 0 ? 0 : 30, color: rgb(cyan, 0.95))
+    ctx.setStrokeColor(rgb(detail == 0 ? cyan : cyanHot))
+    ctx.setLineWidth(detail == 0 ? 20 : 6)
+    ctx.move(to: polar(L.hub * 0.9, L.sweepLead))
+    ctx.addLine(to: polar(R, L.sweepLead))
+    ctx.strokePath()
+    ctx.restoreGState()
+}
+
+/// HUD rings: segmented usage gauge, tick ring, inner reticle and targeting brackets.
+func drawHUD(_ ctx: CGContext, L: Layout, detail: Int, unit: CGFloat) {
+    let (g0, g1) = L.gauge
+    let start = deg(90)                         // gauge fills clockwise from 12 o'clock
+    let lit = 2 * .pi * L.gaugeFill
+    if detail == 0 {
+        // Solid gauge: lit arc plus a dim track for the rest.
+        ctx.setFillColor(rgb(teal, 0.38))
+        ctx.addPath(sector(g0, g1, start + deg(8), start + 2 * .pi - lit - deg(8)))
+        ctx.fillPath()
+        ctx.setFillColor(rgb(cyan))
+        ctx.addPath(sector(g0, g1, start - lit, start - deg(6)))
+        ctx.fillPath()
+    } else {
+        // Segmented gauge with bloom on the lit blocks.
+        let block = deg(detail == 2 ? 5 : 10), gap = deg(detail == 2 ? 1.6 : 3)
+        var a = start
+        let end = start - 2 * .pi + block
+        while a > end {
+            let isLit = (start - a) < lit
+            let p = sector(g0, g1, a - block + gap / 2, a - gap / 2)
+            ctx.saveGState()
+            if isLit { ctx.setShadow(offset: .zero, blur: 18, color: rgb(cyan, 0.8)) }
+            ctx.setFillColor(isLit ? rgb(cyan, 0.95) : rgb(teal, 0.28))
+            ctx.addPath(p)
+            ctx.fillPath()
+            ctx.restoreGState()
+            a -= block
+        }
+        // Thin track rings hugging the gauge.
+        ctx.setLineWidth(max(unit, 2))
+        ctx.setStrokeColor(rgb(cyan, 0.35))
+        ctx.strokeEllipse(in: circle(C, g0 - 8))
+        ctx.strokeEllipse(in: circle(C, g1 + 8))
+
+        // Tick ring: minor every 5°, major every 30°.
+        let (t0, t1) = L.ticks
+        let every: CGFloat = detail == 2 ? 5 : 15
+        var d: CGFloat = 0
+        while d < 360 {
+            let major = d.truncatingRemainder(dividingBy: 30) == 0
+            ctx.setStrokeColor(rgb(cyan, major ? 0.85 : 0.40))
+            ctx.setLineWidth(major ? max(4, 1.6 * unit) : max(1.6, unit))
+            ctx.move(to: polar(major ? t0 - 4 : t0 + 3, deg(d)))
+            ctx.addLine(to: polar(major ? t1 + 6 : t1, deg(d)))
+            ctx.strokePath()
+            d += every
+        }
+        // Crosshair notches at the cardinal points.
+        ctx.setLineCap(.butt)
+        for k in 0..<4 {
+            let a = deg(90 * CGFloat(k))
+            ctx.setStrokeColor(rgb(cyan, 0.9))
+            ctx.setLineWidth(7)
+            ctx.move(to: polar(t1 + 14, a))
+            ctx.addLine(to: polar(t1 + 40, a))
+            ctx.strokePath()
+        }
+        // Targeting brackets in the four corners.
+        let o: CGFloat = 318, arm: CGFloat = 62
+        ctx.setLineWidth(detail == 2 ? 7 : 10)
+        ctx.setLineJoin(.miter)
+        ctx.setStrokeColor(rgb(cyan, 0.75))
+        for (sx, sy) in [(CGFloat(1), CGFloat(1)), (-1, 1), (1, -1), (-1, -1)] {
+            let corner = CGPoint(x: C.x + sx * o, y: C.y + sy * o)
+            ctx.move(to: CGPoint(x: corner.x - sx * arm, y: corner.y))
+            ctx.addLine(to: corner)
+            ctx.addLine(to: CGPoint(x: corner.x, y: corner.y - sy * arm))
+            ctx.strokePath()
+        }
+        if detail == 2 { drawReadouts(ctx, unit: unit) }
+    }
+}
+
+/// Tiny abstract data readouts (bars, no text) tucked by two brackets.
+func drawReadouts(_ ctx: CGContext, unit: CGFloat) {
+    let rows: [[CGFloat]] = [[38, 10, 22], [16, 30], [26, 8, 12, 6]]
+    for (i, row) in rows.enumerated() {
+        var x: CGFloat = 214
+        let y: CGFloat = 790 - CGFloat(i) * 15
+        for (j, w) in row.enumerated() {
+            ctx.setFillColor(rgb(cyan, j == 0 ? 0.75 : 0.4))
+            ctx.fill(CGRect(x: x, y: y, width: w, height: 6))
+            x += w + 6
+        }
+    }
+    // Bottom-right: a little bar graph.
+    for (i, h) in [CGFloat(10), 18, 14, 28, 22, 34].enumerated() {
+        ctx.setFillColor(rgb(cyan, i == 5 ? 0.85 : 0.45))
+        ctx.fill(CGRect(x: 744 + CGFloat(i) * 11, y: 216, width: 7, height: h))
+    }
+}
+
+/// The spindle: a machined disk clamp with screw holes and a glowing core.
+func drawHub(_ ctx: CGContext, L: Layout, detail: Int) {
+    let r = L.hub
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -6), blur: 14, color: rgb(0x000000, 0.7))
+    ctx.setFillColor(rgb(0x1B232B))
+    ctx.fillEllipse(in: circle(C, r))
+    ctx.restoreGState()
+    // Brushed clamp: lit from the upper left.
+    ctx.saveGState()
+    ctx.addEllipse(in: circle(C, r))
+    ctx.clip()
+    ctx.drawRadialGradient(gradient([rgb(0xD5DEE6), rgb(0x7D8A97), rgb(0x2A333C)], [0, 0.5, 1]),
+                           startCenter: CGPoint(x: C.x - r * 0.4, y: C.y + r * 0.45), startRadius: 0,
+                           endCenter: C, endRadius: r * 1.05, options: [.drawsAfterEndLocation])
+    ctx.restoreGState()
+    ctx.setStrokeColor(rgb(0x0A0E12, 0.8))
+    ctx.setLineWidth(detail == 0 ? 6 : 2.5)
+    ctx.strokeEllipse(in: circle(C, r - 1))
+    if detail > 0 {
+        // Clamp screws.
+        for k in 0..<6 {
+            let a = deg(15 + 60 * CGFloat(k))
+            let p = CGPoint(x: C.x + r * 0.72 * cos(a), y: C.y + r * 0.72 * sin(a))
+            ctx.setFillColor(rgb(0x0B0F13, 0.9))
+            ctx.fillEllipse(in: circle(p, r * 0.085))
+        }
+    }
+    // Spindle cap with an emissive ring.
+    let c0 = r * (detail == 0 ? 0.30 : 0.34), c1 = r * (detail == 0 ? 0.52 : 0.46)
+    ctx.saveGState()
+    ctx.setShadow(offset: .zero, blur: detail == 0 ? 0 : 18, color: rgb(cyan, 0.95))
+    ctx.addPath(ring(c0, c1))
+    ctx.setFillColor(rgb(detail == 0 ? cyan : 0x9FF6FF))
+    ctx.fillPath(using: .evenOdd)
+    ctx.restoreGState()
+    ctx.drawRadialGradient(gradient([rgb(0x3A4652), rgb(0x0B1014)]),
+                           startCenter: CGPoint(x: C.x - c0 * 0.3, y: C.y + c0 * 0.3), startRadius: 0,
+                           endCenter: C, endRadius: c0, options: [])
+}
+
+/// The lock-on: an amber blip inside the sweep's afterglow, with a target ring.
+func drawBlip(_ ctx: CGContext, L: Layout, detail: Int) {
+    let p = polar(L.platter * (detail == 0 ? 0.6 : 0.64), L.sweepLead - deg(detail == 0 ? 34 : 26))
+    let r: CGFloat = detail == 0 ? 46 : 15
+    ctx.drawRadialGradient(gradient([rgb(amber, 0.55), rgb(amber, 0)]),
+                           startCenter: p, startRadius: r * 0.5, endCenter: p, endRadius: r * 3.4, options: [])
+    ctx.saveGState()
+    ctx.setShadow(offset: .zero, blur: detail == 0 ? 0 : 16, color: rgb(amber, 0.9))
+    ctx.setFillColor(rgb(amber))
+    ctx.fillEllipse(in: circle(p, r))
+    ctx.restoreGState()
+    ctx.setFillColor(rgb(0xFFF1D6, 0.9))
+    ctx.fillEllipse(in: circle(p, r * 0.42))
+    if detail > 0 {
+        ctx.setStrokeColor(rgb(amber, 0.8))
+        ctx.setLineWidth(detail == 2 ? 3.5 : 6)
+        ctx.strokeEllipse(in: circle(p, r * 2.3))
+        // Lock brackets around the target.
+        let s = r * 3.1, arm = r * 1.1
+        ctx.setLineWidth(detail == 2 ? 3.5 : 6)
+        for (sx, sy) in [(CGFloat(1), CGFloat(1)), (-1, 1), (1, -1), (-1, -1)] {
+            let corner = CGPoint(x: p.x + sx * s, y: p.y + sy * s)
+            ctx.move(to: CGPoint(x: corner.x - sx * arm, y: corner.y))
+            ctx.addLine(to: corner)
+            ctx.addLine(to: CGPoint(x: corner.x, y: corner.y - sy * arm))
+            ctx.strokePath()
+        }
+    }
+}
+
+/// CRT-style scanlines and a glass reflection over the face.
+func drawGlass(_ ctx: CGContext, detail: Int, unit: CGFloat, px: Int) {
+    if detail == 2 && px >= 512 {
+        var y: CGFloat = 100
+        while y < 924 {
+            ctx.setFillColor(rgb(0x000000, 0.10))
+            ctx.fill(CGRect(x: 100, y: y, width: 824, height: unit * 1.2))
+            y += unit * 4
+        }
+    }
+    // Diagonal glass reflection across the upper left.
+    ctx.saveGState()
+    let sheen = CGMutablePath()
+    sheen.move(to: CGPoint(x: 100, y: 924))
+    sheen.addLine(to: CGPoint(x: 640, y: 924))
+    sheen.addCurve(to: CGPoint(x: 100, y: 420), control1: CGPoint(x: 430, y: 760), control2: CGPoint(x: 260, y: 560))
+    sheen.closeSubpath()
+    ctx.addPath(sheen)
+    ctx.clip()
+    ctx.drawLinearGradient(gradient([rgb(0xFFFFFF, detail == 0 ? 0.05 : 0.08), rgb(0xFFFFFF, 0)]),
+                           start: CGPoint(x: 200, y: 900), end: CGPoint(x: 420, y: 600), options: [])
     ctx.restoreGState()
 }
 
 func drawIcon(_ ctx: CGContext, px: Int) {
     let detail = detailLevel(px: px)
     let unit = 1024 / CGFloat(px)          // one device pixel, in canvas units
-    squash = detail == 0 ? 0.40 : 0.30
+    let L = Layout(detail: detail)
     let bodyPath = squircle(body)
 
     // Drop shadow under the tile.
     ctx.saveGState()
     ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: rgb(0x000000, 0.5))
     ctx.addPath(bodyPath)
-    ctx.setFillColor(rgb(0x070A18))
+    ctx.setFillColor(rgb(0x0C1014))
     ctx.fillPath()
     ctx.restoreGState()
 
     ctx.saveGState()
     ctx.addPath(bodyPath)
     ctx.clip()
-    drawBackground(ctx, detail: detail, unit: unit)
-    if detail > 0 { drawMoon(ctx) }
-    if detail == 0 {
-        // Tiny sizes: enlarge the planet so its silhouette carries the icon.
-        ctx.translateBy(x: 512, y: 512)
-        ctx.scaleBy(x: 1.1, y: 1.1)
-        ctx.translateBy(x: -512, y: -512)
-    }
-    drawRings(ctx, front: false, detail: detail, unit: unit)
-    drawPlanet(ctx, detail: detail, unit: unit)
-    drawRings(ctx, front: true, detail: detail, unit: unit)
-    // Glass-like top sheen.
-    ctx.drawLinearGradient(gradient([rgb(0xFFFFFF, 0.10), rgb(0xFFFFFF, 0)]),
-                           start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 640), options: [])
+    drawChassis(ctx, detail: detail, unit: unit)
+    drawPlatter(ctx, L: L, detail: detail, unit: unit)
+    drawSweep(ctx, L: L, detail: detail)
+    drawHUD(ctx, L: L, detail: detail, unit: unit)
+    drawHub(ctx, L: L, detail: detail)
+    drawBlip(ctx, L: L, detail: detail)
+    drawGlass(ctx, detail: detail, unit: unit, px: px)
     ctx.restoreGState()
 
-    // Hairline rim so the dark tile separates from dark docks and wallpapers.
+    // Hairline rim so the tile separates from dark docks and wallpapers.
     ctx.addPath(bodyPath)
-    ctx.setStrokeColor(rgb(0xB8C8FF, detail == 0 ? 0.22 : 0.16))
+    ctx.setStrokeColor(rgb(0xD6E2EE, detail == 0 ? 0.28 : 0.18))
     ctx.setLineWidth(max(3, 1.2 * unit))
     ctx.strokePath()
 }
