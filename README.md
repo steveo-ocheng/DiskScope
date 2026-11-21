@@ -44,3 +44,7 @@ System Settings › Privacy & Security.
   instead of running it; opening it requires an explicit menu choice.
 - **Hardened Runtime, no entitlements.** Not sandboxed by design: measuring a whole disk needs access the
   App Sandbox doesn't allow. Distribute with a Developer ID signature and notarization (see above).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
