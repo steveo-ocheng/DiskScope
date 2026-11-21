@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DiskScope — see what's using your Mac's disk space</title>
-<meta name="description" content="DiskScope is a fast, native macOS disk-usage browser — like ncdu, with a Finder-style interface. Pick any drive or folder and find what's taking up space.">
+<meta name="description" content="DiskScope is a fast, native macOS disk-usage browser — like ncdu, with a Finder-style interface. Pick any drive or folder, see it as a sunburst, find out where hidden space went, and track down duplicate files.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#2b2470">
 <meta property="og:type" content="website">
 <meta property="og:title" content="DiskScope — see what's using your Mac's disk space">
-<meta property="og:description" content="A fast, native macOS disk-usage browser with a Finder-style interface. Source on GitHub.">
+<meta property="og:description" content="A fast, native macOS disk-usage browser with a Finder-style interface, sunburst view and duplicate finder. Free download, source on GitHub.">
 <meta property="og:url" content="https://steveo-ocheng.github.io/DiskScope/">
 <meta property="og:image" content="https://steveo-ocheng.github.io/DiskScope/icon.png">
 <meta name="twitter:card" content="summary">
@@ -222,6 +222,111 @@
   .callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--card); border-radius: 12px; padding: 16px 18px; color: var(--muted); font-size: 15.5px; }
   .callout strong { color: var(--text); }
 
+  .btn.dl { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: 17px; padding: 14px 24px; }
+  .btn.dl:hover { filter: brightness(1.08); }
+  .btn svg { flex: none; }
+  .hero .meta a { color: #fff; }
+  .meta.first { margin-top: 6px; font-size: 13px; color: rgba(255,255,255,.6); }
+  h3.mini { margin: 0; font-size: 17px; }
+
+  /* ---------- New in 1.1 ---------- */
+  .feature { display: grid; grid-template-columns: 1fr 1.2fr; gap: 48px; align-items: center; margin: 0 0 80px; }
+  .feature.rev .ftext { order: 2; }
+  .feature:last-child { margin-bottom: 0; }
+  .feature h3 { font-size: 26px; letter-spacing: -0.01em; margin: 10px 0 10px; line-height: 1.2; }
+  .ftext p { color: var(--muted); margin: 0 0 14px; }
+  .ftext ul { color: var(--muted); margin: 0; padding-left: 20px; font-size: 15.5px; display: grid; gap: 6px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+  figure.fig { margin: 0; }
+  figure.fig figcaption { font-size: 13px; color: var(--muted); text-align: center; margin-top: 10px; }
+  .mock { background: var(--win); color: var(--win-text); border: 1px solid var(--win-line); border-radius: 12px; box-shadow: var(--shadow);
+          font-size: 12.5px; line-height: 1.25; overflow: hidden; }
+  .mbar { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: var(--win-bar); border-bottom: 1px solid var(--win-line); }
+  .mbar .lights { margin: 0; }
+  .mbar .ttl { flex: 1; }
+  .mstatus { border-top: 1px solid var(--win-line); padding: 6px 12px; font-size: 11px; color: var(--win-muted); display: flex; gap: 10px; justify-content: space-between; }
+  .mstatus .link { color: var(--sel); font-weight: 600; }
+
+  .burst { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; gap: 8px; padding: 14px 14px 14px 8px; }
+  .burst svg { width: 100%; height: auto; display: block; }
+  .burst path { stroke: var(--win); stroke-width: 1.2; }
+  .burst .h1 { --c: #7b61ff; } .burst .h2 { --c: #e8407a; } .burst .h3 { --c: #2f8cf0; } .burst .h4 { --c: #17a99a; } .burst .h5 { --c: #f0a020; }
+  .burst .d1 { fill: var(--c); }
+  .burst .d2 { fill: color-mix(in srgb, var(--c) 72%, var(--win)); }
+  .burst .d3 { fill: color-mix(in srgb, var(--c) 50%, var(--win)); }
+  .burst .sm { fill: var(--track); }
+  .burst .hid { fill: url(#p-hatch); }
+  .burst .hov { stroke: var(--win-text); stroke-width: 2; }
+  .burst text { fill: var(--win-text); font-size: 13px; font-weight: 700; text-anchor: middle; }
+  .burst text.s { fill: var(--win-muted); font-size: 10.5px; font-weight: 400; }
+  .legend h5 { margin: 0 0 8px; font-size: 11px; color: var(--win-muted); font-weight: 600; }
+  .legend div { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 0; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+  .legend span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .legend b { font-weight: 400; color: var(--win-muted); font-variant-numeric: tabular-nums; }
+  .legend .tip { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--sel-dim); display: block; font-size: 11.5px; }
+
+  .pop { max-width: 460px; margin: 0 auto; padding: 18px 18px 16px; }
+  .pop-h strong { display: block; font-size: 14.5px; }
+  .pop-h small { color: var(--win-muted); font-size: 12px; }
+  .stack { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 14px 0 12px; background: var(--track); }
+  .stack b { display: block; height: 100%; }
+  .s-files { background: var(--accent); } .s-vols { background: #c06cf0; } .s-hid { background: #8a8a96; }
+  .pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .pop-list li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--win-line); }
+  .pop-list li:last-child { border-bottom: 0; }
+  .pop-list li.vol { padding-left: 18px; color: var(--win-muted); }
+  .pop-list span { font-variant-numeric: tabular-nums; color: var(--win-muted); }
+  .sw { width: 10px; height: 10px; border-radius: 3px; display: block; }
+  .pop-note { margin: 10px 0 0; font-size: 11.5px; color: var(--win-muted); line-height: 1.45; }
+  .pop-note u { text-decoration: none; color: var(--sel); font-weight: 600; }
+
+  .slots { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--win-line); }
+  .slot { border: 1px solid var(--win-line); border-radius: 9px; padding: 7px 10px; display: grid; gap: 1px; min-width: 0; }
+  .slot small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .slot.a small { color: var(--sel); } .slot.b small { color: #e07a10; }
+  .slot em { font-style: normal; color: var(--win-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .swap { color: var(--win-muted); }
+  .go { background: var(--sel); color: #fff; border-radius: 7px; padding: 5px 10px; font-weight: 600; white-space: nowrap; }
+  .dupbody { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.5fr); min-height: 250px; }
+  .sets { border-right: 1px solid var(--win-line); padding: 6px; min-width: 0; }
+  .sets .sum { font-size: 11px; color: var(--win-muted); padding: 4px 6px 8px; }
+  .set { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; padding: 6px; border-radius: 6px; }
+  .set span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .set small { grid-column: 1; color: var(--win-muted); font-size: 10.5px; }
+  .set b { grid-row: span 2; align-self: center; font-weight: 400; color: var(--win-muted); font-variant-numeric: tabular-nums; }
+  .set.on { background: var(--sel); color: #fff; }
+  .set.on small, .set.on b { color: rgba(255,255,255,.85); }
+  .compare { padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .same { font-size: 11.5px; color: var(--win-muted); }
+  .same strong { color: #1f9d55; font-weight: 600; }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pane { border: 1px solid var(--win-line); border-radius: 9px; overflow: hidden; min-width: 0; }
+  .ph { display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 11.5px; border-bottom: 1px solid var(--win-line); }
+  .ph .n { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip { font-size: 10px; font-weight: 700; color: #fff; border-radius: 4px; padding: 1px 5px; }
+  .chip.a { background: var(--sel); } .chip.b { background: #e07a10; }
+  .mark { font-size: 10px; font-weight: 600; border-radius: 999px; padding: 1px 7px; border: 1px solid currentColor; }
+  .mark.keep { color: #1f9d55; } .mark.rm { color: #d33a4a; }
+  .pane svg { display: block; width: 100%; height: auto; }
+  .pane small { display: block; padding: 5px 8px; color: var(--win-muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; color: var(--win-muted); }
+  .acts .sp { flex: 1; }
+  .btnm { border: 1px solid var(--win-line); border-radius: 6px; padding: 3px 8px; color: var(--win-text); background: var(--win-bar); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+
+  .ask { max-width: 440px; margin: 0 auto; }
+  .ask .body { padding: 12px; display: grid; gap: 10px; }
+  .bub { padding: 8px 11px; border-radius: 12px; max-width: 90%; font-size: 12.5px; line-height: 1.45; }
+  .bub.me { justify-self: end; background: var(--sel); color: #fff; border-bottom-right-radius: 4px; }
+  .bub.ai { background: var(--sel-dim); border-bottom-left-radius: 4px; }
+  .bub.ai p { margin: 0 0 6px; color: inherit; font-size: inherit; }
+  .bub.ai p:last-child { margin: 0; }
+  .sent { font-size: 11px; color: var(--sel); font-weight: 600; padding: 0 12px 8px; }
+  .askin { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--win-line); align-items: center; }
+  .askin .field { flex: 1; border: 1px solid var(--win-line); border-radius: 7px; padding: 5px 9px; color: var(--win-muted); background: var(--win); }
+  .offpill { font-size: 10.5px; color: var(--win-muted); border: 1px solid var(--win-line); border-radius: 999px; padding: 1px 8px; }
+
   footer { padding: 40px 0 56px; color: var(--muted); font-size: 14.5px; border-top: 1px solid var(--line); }
   footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: center; }
   footer .brand { color: var(--text); font-size: 16px; }
@@ -234,6 +339,19 @@
     .side { display: none; }
     .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .cols .col:first-child { display: none; }
+    .feature { grid-template-columns: 1fr; gap: 26px; margin-bottom: 60px; }
+    .feature.rev .ftext { order: 0; }
+    .grid.two { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .dupbody { grid-template-columns: 1fr; }
+    .sets { border-right: 0; border-bottom: 1px solid var(--win-line); }
+    .slots { grid-template-columns: 1fr; }
+    .swap { display: none; }
+    .go { justify-self: start; }
+  }
+  @media (max-width: 520px) {
+    .burst { grid-template-columns: 1fr; }
   }
   @media (max-width: 600px) {
     nav.top ul { display: none; }
@@ -253,6 +371,17 @@
 
 <!-- Inline SVG symbols (no external requests) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="p-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#8a8a96"/><rect width="3" height="6" fill="#a7a7b1"/></pattern>
+    <linearGradient id="g-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb3ff"/><stop offset="1" stop-color="#d4eaff"/></linearGradient>
+  </defs>
+  <symbol id="i-photo" viewBox="0 0 160 96"><rect width="160" height="96" fill="url(#g-sky)"/><circle cx="122" cy="26" r="11" fill="#fff4c2"/><path d="M0 96 46 42l26 27 22-19 66 46z" fill="#4a7c9c"/><path d="M0 96 36 68l28 17 30-23 66 34z" fill="#2c4f66"/></symbol>
+  <symbol id="i-burst" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="2.6"/><path d="M12 6a6 6 0 0 1 6 6"/><path d="M12 2.5A9.5 9.5 0 1 1 2.5 12"/></g></symbol>
+  <symbol id="i-hidden" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5a9 9 0 0 1 5.5 5.5H15z" stroke-dasharray="2 2.2"/></g></symbol>
+  <symbol id="i-copies" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M8 3.5h7l3.5 3.5v10.5H8z"/><path d="M5.5 7v13.5h10"/><path d="m10.5 11.5 1.8 1.8 3.4-3.6" stroke-linecap="round"/></g></symbol>
+  <symbol id="i-script" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15M12.5 15H17"/></g></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18M3 14.5h18M9.5 9.5v10"/></g></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 5.5h16v10.5H11l-4.5 3.5V16H4z"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path fill="currentColor" d="M2 6.5A2.5 2.5 0 0 1 4.5 4h4.6l2 2.2h8.4A2.5 2.5 0 0 1 22 8.7v9.8a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5z"/><path fill="#fff" opacity=".28" d="M2 9h20v1.2H2z"/></symbol>
   <symbol id="i-doc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M6 2.8h8l4.2 4.2v14.2H6z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M14 2.8V7h4.2"/></symbol>
   <symbol id="i-drive" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.5" cy="12" r="1.3" fill="currentColor"/><path d="M5.5 12h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
@@ -275,9 +404,10 @@
       <a class="brand" href="#top" id="top"><img src="icon.png" alt="" width="32" height="32">DiskScope</a>
       <ul>
         <li><a class="navlink" href="#features">Features</a></li>
+        <li><a class="navlink" href="#new">New in 1.1</a></li>
         <li><a class="navlink" href="#how">How it measures</a></li>
         <li><a class="navlink" href="#privacy">Privacy &amp; safety</a></li>
-        <li><a class="navlink" href="#install">Install</a></li>
+        <li><a class="navlink" href="#install">Download</a></li>
         <li><a class="navlink" href="https://github.com/steveo-ocheng/DiskScope">GitHub</a></li>
       </ul>
     </nav>
@@ -289,11 +419,14 @@
       <p class="lede">DiskScope is a fast, native macOS disk-usage browser — the power of <code>ncdu</code>
         with the Finder interface you already know. Pick any drive or folder and drill straight to what's taking up space.</p>
       <div class="cta">
-        <a class="btn primary" href="#install">Build &amp; install</a>
+        <a class="btn primary" href="https://github.com/steveo-ocheng/DiskScope/releases/latest">
+          <svg width="18" height="18" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
         <a class="btn ghost" href="https://github.com/steveo-ocheng/DiskScope">
           <svg width="18" height="18" aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
       </div>
-      <p class="meta">Free · macOS 14 Sonoma or later · Apple silicon &amp; Intel</p>
+      <p class="meta">Version 1.1 · macOS 14 Sonoma or later · Universal (Apple silicon &amp; Intel) · Free &amp; open source (MIT)</p>
+      <p class="meta first">Not notarized yet: the first time you open it, click Open Anyway in System Settings › Privacy &amp; Security.
+        <a href="#install">Details</a></p>
     </div>
 
     <figure class="shot">
@@ -324,7 +457,7 @@
             <div class="nav2"><span>‹</span><span>›</span></div>
             <div class="ttl">Library<small>212 GB</small></div>
             <div class="sp"></div>
-            <div class="seg"><span>☰</span><span class="on">▥</span></div>
+            <div class="seg"><span>☰</span><span class="on">▥</span><span>◔</span></div>
             <div class="search">⌕ Search</div>
           </div>
           <div class="cols">
@@ -376,8 +509,8 @@
         <article class="card">
           <div class="glyph"><svg aria-hidden="true"><use href="#i-columns"/></svg></div>
           <h3>Finder-style browsing</h3>
-          <p>Column and list views with sizes and usage bars on every row, back/forward history, a clickable path bar,
-            and the keyboard shortcuts you expect (⌘[ ⌘] ⌘↑ ⌘2 ⌘3).</p>
+          <p>Column, list and sunburst views with sizes and usage bars, back/forward history, a clickable path bar,
+            and the keyboard shortcuts you expect (⌘[ ⌘] ⌘↑ ⌘2 ⌘3 ⌘4).</p>
         </article>
         <article class="card">
           <div class="glyph"><svg aria-hidden="true"><use href="#i-bolt"/></svg></div>
@@ -400,14 +533,221 @@
         <article class="card">
           <div class="glyph"><svg aria-hidden="true"><use href="#i-trash"/></svg></div>
           <h3>Clean up with confidence</h3>
-          <p>Move items to the Trash, show them in Finder or copy their paths. Rescan just the folder you're in after
-            changes — totals update all the way up.</p>
+          <p>Move items to the Trash, show them in Finder, copy their paths or export the list as CSV. Rescan just the
+            folder you're in after changes — totals update all the way up.</p>
         </article>
       </div>
     </div>
   </section>
 
-  <section id="how" class="alt">
+  <section id="new" class="alt">
+    <div class="wrap">
+      <h2>New in 1.1</h2>
+      <p class="sub">See a whole disk at a glance, find out where the “missing” space went, track down duplicate files, and ask Claude about your scan.</p>
+
+      <div class="feature">
+        <div class="ftext">
+          <span class="tag">Sunburst view · ⌘4</span>
+          <h3>Your disk as rings</h3>
+          <p>A third view next to List and Columns. The folder you're in sits in the center; each ring is one level deeper,
+            and every slice is sized by the space it uses — so the biggest things are impossible to miss.</p>
+          <ul>
+            <li>Hover a slice for its name, size and share of the folder.</li>
+            <li>Click a slice to drill in; click the center to go back up.</li>
+            <li>A “Largest items” legend sits alongside, and tiny items are grouped so the chart stays readable.</li>
+          </ul>
+        </div>
+        <figure class="fig">
+          <div class="mock" role="img" aria-label="Illustration of the sunburst view: Macintosh HD in the center, rings for Users, Applications, Library, System and private, and a gray hatched slice for space not in the scan.">
+            <div class="mbar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="ttl">Macintosh HD</span>
+              <div class="seg" aria-hidden="true"><span>☰</span><span>▥</span><span class="on">◔</span></div></div>
+            <div class="burst">
+              <svg viewBox="0 0 300 300" aria-hidden="true" focusable="false">
+                <path class="h1 d1" d="M150.0 66.0A84 84 0 1 1 82.1 199.4L109.6 179.4A50 50 0 1 0 150.0 100.0Z"><title>Users: 362 GB</title></path>
+                <path class="h1 d2" d="M150.0 34.0A116 116 0 1 1 62.7 226.4L84.5 207.3A87 87 0 1 0 150.0 63.0Z"><title>Users › you: 354 GB</title></path>
+                <path class="h1 d3 hov" d="M150.0 4.0A146 146 0 0 1 249.5 256.8L231.1 237.1A119 119 0 0 0 150.0 31.0Z"><title>you › Library: 212 GB</title></path>
+                <path class="h1 d3" d="M249.5 256.8A146 146 0 0 1 164.0 295.3L161.4 268.5A119 119 0 0 0 231.1 237.1Z"><title>you › Movies: 58 GB</title></path>
+                <path class="h1 d3" d="M164.0 295.3A146 146 0 0 1 110.2 290.5L117.5 264.5A119 119 0 0 0 161.4 268.5Z"><title>you › Documents: 33 GB</title></path>
+                <path class="h1 d3" d="M110.2 290.5A146 146 0 0 1 72.6 273.8L87.0 250.9A119 119 0 0 0 117.5 264.5Z"><title>you › Downloads: 25 GB</title></path>
+                <path class="h1 d3" d="M72.6 273.8A146 146 0 0 1 49.3 255.7L67.9 236.1A119 119 0 0 0 87.0 250.9Z"><title>you › Pictures: 18 GB</title></path>
+                <path class="sm d3" d="M49.3 255.7A146 146 0 0 1 40.2 246.2L60.5 228.4A119 119 0 0 0 67.9 236.1Z"><title>you › smaller items: 8 GB</title></path>
+                <path class="sm d2" d="M62.7 226.4A116 116 0 0 1 56.2 218.2L79.6 201.2A87 87 0 0 0 84.5 207.3Z"><title>Users › Shared: 8 GB</title></path>
+                <path class="h2 d1" d="M82.1 199.4A84 84 0 0 1 66.5 159.2L100.3 155.5A50 50 0 0 0 109.6 179.4Z"><title>Applications: 46 GB</title></path>
+                <path class="h2 d2" d="M56.2 218.2A116 116 0 0 1 47.8 205.0L73.4 191.2A87 87 0 0 0 79.6 201.2Z"><title>Applications › Xcode: 12 GB</title></path>
+                <path class="h2 d2" d="M47.8 205.0A116 116 0 0 1 44.4 197.9L70.8 185.9A87 87 0 0 0 73.4 191.2Z"><title>Applications › Final Cut Pro: 6 GB</title></path>
+                <path class="sm d2" d="M44.4 197.9A116 116 0 0 1 34.7 162.7L63.5 159.5A87 87 0 0 0 70.8 185.9Z"><title>Applications › smaller items: 28 GB</title></path>
+                <path class="h3 d1" d="M66.5 159.2A84 84 0 0 1 67.1 136.6L100.6 142.0A50 50 0 0 0 100.3 155.5Z"><title>Library: 24 GB</title></path>
+                <path class="h3 d2" d="M34.7 162.7A116 116 0 0 1 34.1 144.4L63.1 145.8A87 87 0 0 0 63.5 159.5Z"><title>Library › Application Support: 14 GB</title></path>
+                <path class="h3 d2" d="M34.1 144.4A116 116 0 0 1 34.8 136.6L63.6 140.0A87 87 0 0 0 63.1 145.8Z"><title>Library › Caches: 6 GB</title></path>
+                <path class="sm d2" d="M34.8 136.6A116 116 0 0 1 35.5 131.4L64.1 136.1A87 87 0 0 0 63.6 140.0Z"><title>Library › smaller items: 4 GB</title></path>
+                <path class="h4 d1" d="M67.1 136.6A84 84 0 0 1 71.2 121.0L103.1 132.7A50 50 0 0 0 100.6 142.0Z"><title>System: 17 GB</title></path>
+                <path class="h4 d2" d="M35.5 131.4A116 116 0 0 1 40.3 112.4L67.7 121.8A87 87 0 0 0 64.1 136.1Z"><title>System › Library: 15 GB</title></path>
+                <path class="sm d2" d="M40.3 112.4A116 116 0 0 1 41.1 110.0L68.3 120.0A87 87 0 0 0 67.7 121.8Z"><title>System › smaller items: 2 GB</title></path>
+                <path class="h5 d1" d="M71.2 121.0A84 84 0 0 1 76.7 109.0L106.4 125.6A50 50 0 0 0 103.1 132.7Z"><title>private: 14 GB</title></path>
+                <path class="h5 d2" d="M41.1 110.0A116 116 0 0 1 48.2 94.5L73.6 108.4A87 87 0 0 0 68.3 120.0Z"><title>private › var: 13 GB</title></path>
+                <path class="sm d2" d="M48.2 94.5A116 116 0 0 1 48.8 93.3L74.1 107.5A87 87 0 0 0 73.6 108.4Z"><title>private › smaller items: 1 GB</title></path>
+                <path class="hid" d="M76.7 109.0A84 84 0 0 1 150.0 66.0L150.0 100.0A50 50 0 0 0 106.4 125.6Z"><title>Not in scan: 94 GB</title></path>
+                <text x="150" y="148">Macintosh HD</text>
+                <text class="s" x="150" y="163">557 GB used</text>
+              </svg>
+              <div class="legend" aria-hidden="true">
+                <h5>Largest items</h5>
+                <div><i style="background:#7b61ff"></i><span>Users</span><b>362 GB</b></div>
+                <div><i style="background:#e8407a"></i><span>Applications</span><b>46 GB</b></div>
+                <div><i style="background:#2f8cf0"></i><span>Library</span><b>24 GB</b></div>
+                <div><i style="background:#17a99a"></i><span>System</span><b>17 GB</b></div>
+                <div><i style="background:#f0a020"></i><span>private</span><b>14 GB</b></div>
+                <div><i style="background:#8a8a96"></i><span>Not in scan</span><b>94 GB</b></div>
+                <span class="tip"><strong>Library</strong> · 212 GB<br>60% of “you” · click to open</span>
+              </div>
+            </div>
+            <div class="mstatus"><span>5 items, 463 GB on disk</span><span class="link">94 GB not in scan ⓘ</span></div>
+          </div>
+          <figcaption>Illustration with example sizes, not a screenshot</figcaption>
+        </figure>
+      </div>
+
+      <div class="feature rev">
+        <div class="ftext">
+          <span class="tag">Not in scan</span>
+          <h3>Where did the rest of my space go?</h3>
+          <p>Finder says the disk is nearly full, but the files add up to far less. When you scan a whole disk, DiskScope now
+            shows that gap — and what's in it.</p>
+          <ul>
+            <li>Other volumes that share the disk: virtual-memory swap, Preboot, Recovery, Software Update.</li>
+            <li>Time Machine local snapshots, folders DiskScope wasn't allowed to read, and hidden system data.</li>
+            <li>How much is purgeable — space macOS frees by itself when it needs to.</li>
+            <li>Shown in the status bar, and as a gray slice in the sunburst.</li>
+          </ul>
+        </div>
+        <figure class="fig">
+          <div class="mock pop" role="img" aria-label="Illustration of the Not in scan breakdown: of 557 GB used, 463 GB is in scanned files, 28.4 GB is in other volumes and 65.6 GB isn't visible to the scan.">
+            <div class="pop-h"><strong>94 GB of Macintosh HD isn't in this scan</strong><small>557 GB used on the disk</small></div>
+            <div class="stack" aria-hidden="true"><b class="s-files" style="width:83.1%"></b><b class="s-vols" style="width:5.1%"></b><b class="s-hid" style="width:11.8%"></b></div>
+            <ul class="pop-list" aria-hidden="true">
+              <li><i class="sw s-files"></i>Files in this scan<span>463 GB</span></li>
+              <li><i class="sw s-vols"></i>Other volumes on this disk<span>28.4 GB</span></li>
+              <li class="vol"><i></i>Preboot (startup files)<span>22.1 GB</span></li>
+              <li class="vol"><i></i>Recovery<span>3.0 GB</span></li>
+              <li class="vol"><i></i>VM (swap and sleep image)<span>2.1 GB</span></li>
+              <li class="vol"><i></i>Update (software updates)<span>1.2 GB</span></li>
+              <li><i class="sw s-hid"></i>Not visible to the scan<span>65.6 GB</span></li>
+            </ul>
+            <p class="pop-note">Includes 4 Time Machine local snapshots, 312 items DiskScope couldn't read
+              (<u>Grant Full Disk Access</u>), and system data. 48 GB of the used space is purgeable: macOS frees it
+              automatically when space runs low.</p>
+          </div>
+          <figcaption>Illustration with example sizes, not a screenshot</figcaption>
+        </figure>
+      </div>
+
+      <div class="feature">
+        <div class="ftext">
+          <span class="tag">Find Duplicates</span>
+          <h3>Find copies, compare them side by side</h3>
+          <p>Pick a folder — and, if you like, a second folder to compare it with, such as a backup drive. DiskScope matches
+            files by size, then by SHA-256 checksum, and lists the duplicate sets with the biggest savings first.</p>
+          <ul>
+            <li>See two copies next to each other: text, images, video and audio (with Play Both), PDFs, or a Quick Look thumbnail.</li>
+            <li>Mark each copy Keep or Remove, or use a rule: keep the copy in Folder A or B, the oldest, the newest, or the
+              shortest path. Every set always keeps at least one copy.</li>
+            <li>iCloud and Dropbox placeholders are skipped, so nothing gets downloaded. Hard links aren't counted as duplicates.</li>
+          </ul>
+        </div>
+        <figure class="fig">
+          <div class="mock" role="img" aria-label="Illustration of the Find Duplicates window: Folder A is Pictures, Folder B is a backup folder; a photo found in both is shown twice side by side, with the Folder A copy marked Keep and the Folder B copy marked Remove.">
+            <div class="mbar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="ttl">Find Duplicates</span></div>
+            <div class="slots" aria-hidden="true">
+              <div class="slot a"><small>Folder A</small><span>Pictures</span><em>~/Pictures</em></div>
+              <span class="swap">⇄</span>
+              <div class="slot b"><small>Folder B</small><span>Photos 2023</span><em>Backup SSD › Photos 2023</em></div>
+              <span class="go">Find Duplicates</span>
+            </div>
+            <div class="dupbody" aria-hidden="true">
+              <div class="sets">
+                <div class="sum">38 duplicate sets · 6.4 GB could be freed</div>
+                <div class="set"><span>Iceland.mov</span><small>2 copies · 2.1 GB each</small><b>2.1 GB</b></div>
+                <div class="set"><span>Wedding album.zip</span><small>3 copies · 940 MB each</small><b>1.9 GB</b></div>
+                <div class="set on"><span>IMG_2041.HEIC</span><small>2 copies · 4.2 MB each</small><b>4.2 MB</b></div>
+                <div class="set"><span>notes.md</span><small>2 copies · 18 KB each</small><b>18 KB</b></div>
+              </div>
+              <div class="compare">
+                <div class="same"><strong>✓ Identical contents</strong> · SHA-256 3f9a…c2e1</div>
+                <div class="panes">
+                  <div class="pane">
+                    <div class="ph"><span class="chip a">A</span><span class="n">IMG_2041.HEIC</span><span class="mark keep">Keep</span></div>
+                    <svg viewBox="0 0 160 96"><use href="#i-photo"/></svg>
+                    <small>~/Pictures/2023/Iceland</small>
+                  </div>
+                  <div class="pane">
+                    <div class="ph"><span class="chip b">B</span><span class="n">IMG_2041.HEIC</span><span class="mark rm">Remove</span></div>
+                    <svg viewBox="0 0 160 96"><use href="#i-photo"/></svg>
+                    <small>Backup SSD/Photos 2023/Iceland</small>
+                  </div>
+                </div>
+                <div class="acts"><span>Keep rule: Folder A</span><span class="sp"></span><span class="btnm">Export CSV…</span><span class="btnm">Removal Script…</span></div>
+              </div>
+            </div>
+          </div>
+          <figcaption>Illustration with example files, not a screenshot</figcaption>
+        </figure>
+      </div>
+
+      <div class="grid two" style="margin-bottom:80px">
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-script"/></svg></div>
+          <h3>A removal script you review</h3>
+          <p>Find Duplicates never deletes or moves anything itself. <strong>Removal Script…</strong> saves a bash script you
+            can read first, then run in Terminal: <code>bash remove-duplicates.sh</code> is a dry run, and adding
+            <code>--apply</code> moves the marked copies to the Trash. Before each move it re-checks with
+            <code>shasum -a 256</code> that the file and the copy you're keeping are still identical, and skips anything that
+            changed. The script is saved without execute permission.</p>
+        </article>
+        <article class="card">
+          <div class="glyph"><svg aria-hidden="true"><use href="#i-table"/></svg></div>
+          <h3>Export to CSV</h3>
+          <p>Export the folder you're viewing or the whole scan — path, kind, size on disk, apparent size, items, modified —
+            or the duplicate sets with their checksums, sizes, wasted space and Keep/Remove marks. Values a spreadsheet could
+            treat as formulas are neutralised, so opening an export can't run anything.</p>
+        </article>
+      </div>
+
+      <div class="feature rev">
+        <div class="ftext">
+          <span class="tag">Ask Claude · optional</span>
+          <h3>Ask questions about your scan</h3>
+          <p>Open the Ask Claude panel from the toolbar and ask things like “What's using the most space?” or “What can I
+            safely delete?”. Claude answers from a summary of your scan.</p>
+          <ul>
+            <li>Off until you turn it on and add your own Anthropic API key in DiskScope › Settings. The key is kept in your
+              Mac's Keychain, and usage is billed to your key.</li>
+            <li>Sends a text summary — names, sizes, dates — never file contents. “What gets sent” shows you exactly what
+              will be sent before you press Send.</li>
+            <li>Claude can only answer. It can't open, move or delete anything.</li>
+          </ul>
+        </div>
+        <figure class="fig">
+          <div class="mock ask" role="img" aria-label="Illustration of the Ask Claude panel: you ask what you can safely delete, and Claude points to caches and old installers and warns that the Mail folder holds your mail.">
+            <div class="mbar"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><span class="ttl">Ask Claude</span><span class="offpill">Your API key</span></div>
+            <div class="body" aria-hidden="true">
+              <div class="bub me">What can I safely delete?</div>
+              <div class="bub ai">
+                <p><strong>~/Library/Caches</strong> (17.8 GB) is rebuilt by apps as needed, so clearing it is usually safe.</p>
+                <p><strong>~/Downloads</strong> has 6.2 GB of installer disk images from over a year ago.</p>
+                <p>Be careful with <strong>~/Library/Mail</strong> (72.5 GB): that's your mail. Use Mail's own settings to remove attachments.</p>
+              </div>
+            </div>
+            <div class="sent" aria-hidden="true">What gets sent ›</div>
+            <div class="askin" aria-hidden="true"><span class="field">Ask about this scan…</span><span class="go">Send</span></div>
+          </div>
+          <figcaption>Illustration with an example question and answer, not a screenshot</figcaption>
+        </figure>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="how">
     <div class="wrap split">
       <div>
         <h2>Numbers you can trust</h2>
@@ -415,13 +755,16 @@
           and its totals match <code>du</code> exactly.</p>
         <ul class="checks">
           <li><div><strong>Metadata only</strong><span>Each folder is listed with <code>readdir</code> and every entry is
-            measured with <code>fstatat</code>. Files are never opened or read.</span></div></li>
+            measured with <code>fstatat</code>. Scanning never opens or reads files.</span></div></li>
           <li><div><strong>Symlinks are never followed</strong><span>A link counts as the link itself, so nothing is
             counted twice and scans can't wander off into other places.</span></div></li>
           <li><div><strong>Hard links counted once</strong><span>Files with several names share one inode; DiskScope counts
             that storage a single time, like <code>du</code>.</span></div></li>
           <li><div><strong>No double counting on the startup disk</strong><span>When scanning <code>/</code>, the system's
-            duplicate view of your data volume and other mounted disks are skipped.</span></div></li>
+            duplicate view of your data volume, Software Update's second mount of the system volume, and other mounted
+            disks are skipped.</span></div></li>
+          <li><div><strong>The gap is accounted for</strong><span>For whole-disk scans, the disk's used space is compared with
+            what the scan found, and the difference is broken down using the file system's own per-volume figures.</span></div></li>
         </ul>
       </div>
       <div>
@@ -448,41 +791,63 @@
     </div>
   </section>
 
-  <section id="privacy">
+  <section id="privacy" class="alt">
     <div class="wrap split">
       <div>
         <h2>Private by design. Careful with your files.</h2>
-        <p class="sub" style="margin-bottom:0">DiskScope has no network code at all. Nothing is uploaded, nothing is
-          tracked, and scanning never changes anything on disk.</p>
+        <p class="sub" style="margin-bottom:0">DiskScope works offline by default. The only network feature is the optional
+          Ask Claude panel, and it sends nothing until you turn it on and press Send. Nothing is tracked, and scanning
+          never changes anything on disk.</p>
       </div>
       <ul class="checks">
-        <li><div><strong>Read-only scanning</strong><span>Scans only read file metadata. The only thing that changes files is
-          Move to Trash — and only when you confirm it.</span></div></li>
+        <li><div><strong>Read-only scanning</strong><span>Scans read only file metadata: names, sizes and dates. The only
+          thing in DiskScope that changes files is Move to Trash in the browser, and only when you confirm it.</span></div></li>
+        <li><div><strong>File contents only when you ask</strong><span>Find Duplicates reads files to compute their SHA-256
+          checksums, and its previews read the copies you compare, all on your Mac. Only regular files are opened, and
+          iCloud or Dropbox placeholders are skipped so nothing is downloaded. Previews use Apple's own frameworks
+          (ImageIO, AVFoundation, PDFKit, Quick Look), the same ones Finder uses.</span></div></li>
+        <li><div><strong>Ask Claude: opt-in, and you see what's sent</strong><span>It uses your own Anthropic API key, kept
+          in the macOS Keychain. When you press Send, a text summary of the scan goes to Anthropic's API over HTTPS: names
+          relative to the scan root (your home folder shown as <code>~</code>), sizes, dates and the “Not in scan”
+          breakdown. Never file contents. “What gets sent” shows it all before you send, and Claude can't open, move or
+          delete anything.</span></div></li>
+        <li><div><strong>Duplicates: you decide, you run it</strong><span>Find Duplicates never deletes anything. Its removal
+          script is a dry run unless you add <code>--apply</code>, always keeps at least one copy, and re-checks each file's
+          checksum right before moving it to the Trash.</span></div></li>
         <li><div><strong>Protected locations</strong><span>System folders, top-level folders like your home, Library and
           Applications, and whole drives can't be sent to the Trash.</span></div></li>
         <li><div><strong>Re-checked before every move</strong><span>Right before trashing, each item is verified to still be the
           same kind of item at the same real location — if anything changed since the scan, DiskScope refuses.</span></div></li>
         <li><div><strong>Clear confirmation</strong><span>The prompt lists full paths, with invisible or direction-reversing
           characters made visible so a file name can't disguise itself. Items go to the Trash, so you can still put them back.</span></div></li>
+        <li><div><strong>Spreadsheet-safe exports</strong><span>CSV exports neutralise values a spreadsheet could treat as
+          formulas.</span></div></li>
         <li><div><strong>Hardened Runtime</strong><span>Built with Apple's Hardened Runtime and no special entitlements.</span></div></li>
       </ul>
     </div>
   </section>
 
-  <section id="install" class="alt">
+  <section id="install">
     <div class="wrap split">
       <div>
-        <h2>Build &amp; install</h2>
-        <p class="sub" style="margin-bottom:20px">There's no notarized download yet, so for now DiskScope is built from source.
-          It takes a minute and needs only Apple's free Command Line Tools — no Xcode project.</p>
-        <div class="callout"><strong>Requirements:</strong> macOS 14 Sonoma or later, on Apple silicon or Intel.
-          Install the tools with <code>xcode-select --install</code> if you don't have them.</div>
+        <h2>Download &amp; install</h2>
+        <p class="sub" style="margin-bottom:20px">Download the DMG, open it, and drag DiskScope to Applications.</p>
+        <p style="margin:0 0 10px"><a class="btn dl" href="https://github.com/steveo-ocheng/DiskScope/releases/latest">
+          <svg width="20" height="20" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a></p>
+        <p class="note" style="margin:0 0 22px">macOS 14 Sonoma or later · universal (Apple silicon &amp; Intel) · free &amp; open
+          source (MIT). Each release lists the DMG's SHA-256 so you can check your download.</p>
+        <div class="callout"><strong>First launch:</strong> DiskScope isn't notarized by Apple yet (that needs a paid
+          Developer ID), so macOS says it can't verify the developer. Open System Settings › Privacy &amp; Security, scroll
+          down and click <strong>Open Anyway</strong>. On macOS 15 and later, right-click › Open no longer does this.</div>
       </div>
       <div class="steps">
+        <h3 class="mini">Or build it from source</h3>
         <pre class="code"><code><span class="c"># Build a universal app and install it in /Applications</span>
 git clone https://github.com/steveo-ocheng/DiskScope.git
 cd DiskScope
 ./build-app.sh --install</code></pre>
+        <div class="callout"><strong>Building needs</strong> only Apple's free Command Line Tools — no Xcode project.
+          Install them with <code>xcode-select --install</code> if you don't have them.</div>
         <div class="callout"><strong>Optional — complete results:</strong> macOS keeps some folders (like Mail and Messages)
           private. To include them, add DiskScope under System Settings › Privacy &amp; Security › Full Disk Access, then
           rescan. The orange “unreadable” note in DiskScope's status bar opens that page for you.</div>
