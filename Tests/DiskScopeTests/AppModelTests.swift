@@ -395,7 +395,7 @@ struct AppModelSortingTests {
 
     @Test func identifiersAreStable() {
         #expect(SortKey.allCases.map(\.id) == ["Size", "Name", "Items", "Date Modified"])
-        #expect(ViewMode.allCases == [.list, .columns])
+        #expect(ViewMode.allCases == [.list, .columns, .sunburst])
         let a = AlertInfo(title: "t", message: "m"), b = AlertInfo(title: "t", message: "m")
         #expect(a.id != b.id)
     }

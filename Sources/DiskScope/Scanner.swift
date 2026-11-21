@@ -40,8 +40,12 @@ final class Scanner: @unchecked Sendable {   // mutable state is guarded by `can
 
     /// Paths never descended into when they're below the scan root:
     /// the Data volume is already visible through firmlinks (/Users, /Applications…),
-    /// /Volumes holds other disks, /dev is not real storage.
-    static let skipPaths: Set<String> = ["/System/Volumes/Data", "/Volumes", "/dev"]
+    /// /Volumes holds other disks, /dev is not real storage, and the Update mnt1 folders are
+    /// second mounts of system volumes used by Software Update (counting them would double up).
+    static let skipPaths: Set<String> = [
+        "/System/Volumes/Data", "/Volumes", "/dev",
+        "/System/Volumes/Update/mnt1", "/System/Volumes/Update/SFR/mnt1",
+    ]
 
     /// Metadata reads are latency-bound, so a few more threads than performance cores
     /// helps; beyond ~12 contention in the filesystem layer eats the gains.

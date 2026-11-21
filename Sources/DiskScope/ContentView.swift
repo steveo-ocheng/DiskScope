@@ -74,6 +74,7 @@ struct BrowserView: View {
                     switch model.viewMode {
                     case .columns: ColumnBrowser(current: current)
                     case .list: ListBrowser(current: current)
+                    case .sunburst: SunburstView(current: current)
                     }
                 }
             }

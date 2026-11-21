@@ -16,7 +16,7 @@ struct VolumeSummary {
 }
 
 enum ViewMode: String, CaseIterable {
-    case list, columns
+    case list, columns, sunburst
 }
 
 enum SortKey: String, CaseIterable, Identifiable {
@@ -34,7 +34,10 @@ final class AppModel: ObservableObject {
     @Published var scanTarget = ""
     @Published var root: FileNode? { didSet { sortCache.removeAll() } }
     @Published var volume: VolumeSummary?
+    /// Whole-disk scans only: used space the scan didn't find in files (see HiddenSpace).
+    @Published private(set) var hiddenSpace: HiddenSpace?
     @Published var stayOnDevice = false
+    private var rootStayOnDevice = false // the setting the current root was scanned with
 
     // Navigation
     @Published private(set) var current: FileNode?
@@ -140,8 +143,10 @@ final class AppModel: ObservableObject {
         }
         // Free the previous tree before building a new one; large scans can hold millions of nodes.
         resetTree()
+        let stay = stayOnDevice
         startScan(path) { [weak self] newRoot in
             guard let self else { return }
+            self.rootStayOnDevice = stay
             self.root = newRoot
             self.navigate(to: newRoot)
             self.refreshVolume()
@@ -225,15 +230,21 @@ final class AppModel: ObservableObject {
         searchText = ""
         searchResults = []
         volume = nil
+        hiddenSpace = nil
         updateHistoryFlags()
     }
 
     private func refreshVolume() {
-        guard let path = root?.path else { volume = nil; return }
+        guard let root else { volume = nil; hiddenSpace = nil; return }
+        let path = root.path, scanned = root.diskSize, unreadable = root.errorCount, stay = rootStayOnDevice
+        let rootID = ObjectIdentifier(root)
         Task.detached(priority: .utility) {
             let v = Volume(url: URL(fileURLWithPath: path))
+            let hidden = HiddenSpace.measure(root: path, scanned: scanned, unreadable: unreadable, stayOnDevice: stay)
             await MainActor.run { [weak self] in
-                self?.volume = v.map { VolumeSummary(name: $0.name, total: $0.total, available: $0.available) }
+                guard let self, let current = self.root, ObjectIdentifier(current) == rootID else { return }
+                self.volume = v.map { VolumeSummary(name: $0.name, total: $0.total, available: $0.available) }
+                self.hiddenSpace = hidden
             }
         }
     }
@@ -287,7 +298,7 @@ final class AppModel: ObservableObject {
 
     func goUp() {
         guard let current else { return }
-        if selectedFile != nil, viewMode == .columns { selectedFile = nil; return }
+        if selectedFile != nil, viewMode != .list { selectedFile = nil; return }
         if let parent = current.parent { navigate(to: parent, selecting: nil) }
     }
 
@@ -371,7 +382,7 @@ final class AppModel: ObservableObject {
         switch viewMode {
         case .list:
             return current.children.filter { listSelection.contains($0.id) }
-        case .columns:
+        case .columns, .sunburst:
             if let f = selectedFile { return [f] }
             return current.parent == nil ? [] : [current]
         }
@@ -400,6 +411,29 @@ final class AppModel: ObservableObject {
         } catch {
             alert = AlertInfo(title: "Couldn't eject “\(volume.name)”", message: error.localizedDescription)
         }
+    }
+
+    /// The scanned node at `path` (a canonical path inside the scan), if any.
+    func node(atPath path: String) -> FileNode? {
+        guard let root else { return nil }
+        let rootPath = root.path
+        if path == rootPath { return root }
+        let prefix = rootPath == "/" ? "/" : rootPath + "/"
+        guard path.hasPrefix(prefix) else { return nil }
+        var node = root
+        for name in path.dropFirst(prefix.count).split(separator: "/") {
+            guard let child = node.children.first(where: { $0.name == name }) else { return nil }
+            node = child
+        }
+        return node
+    }
+
+    /// Something outside the browser (Find Duplicates) moved `path` to the Trash: drop it from the tree.
+    func forgetTrashed(path: String) {
+        guard let node = node(atPath: path), node.parent != nil else { return }
+        detach(node)
+        revision += 1
+        refreshVolume()
     }
 
     // MARK: Trash

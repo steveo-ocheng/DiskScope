@@ -18,7 +18,7 @@ if [[ "$DEV" == *CommandLineTools* ]]; then
          -Xlinker -F -Xlinker "$F" -Xlinker -rpath -Xlinker "$F")
 fi
 
-SCRATCH=.build/test
+SCRATCH="${SCRATCH:-.build/test}"   # override to run several builds side by side
 STATUS=0
 swift test --scratch-path "$SCRATCH" --enable-code-coverage "${FLAGS[@]}" "$@" || STATUS=$?
 
@@ -29,7 +29,7 @@ BIN="$SCRATCH/debug/DiskScopePackageTests.xctest/Contents/MacOS/DiskScopePackage
 echo
 echo "== Coverage: logic =="
 xcrun llvm-cov report "$BIN" -instr-profile "$PROFDATA" \
-  Sources/DiskScope/{Scanner,FileNode,AppModel,Volumes}.swift
+  Sources/DiskScope/{Scanner,FileNode,AppModel,Volumes,HiddenSpace}.swift
 echo
 echo "== Coverage: UI (not unit-tested) =="
 xcrun llvm-cov report "$BIN" -instr-profile "$PROFDATA" \
