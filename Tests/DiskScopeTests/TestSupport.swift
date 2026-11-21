@@ -142,23 +142,26 @@ func makeTree(rootName: String, _ specs: [String]) -> FileNode {
 
 /// Polls the main actor until the model leaves `.scanning` (scans finish asynchronously).
 @MainActor
-func waitForScan(_ model: AppModel, timeout: TimeInterval = 20) async throws {
-    let deadline = Date().addingTimeInterval(timeout)
+func waitForScan(_ model: AppModel, timeout: TimeInterval = 60) async throws {
     // Let a just-started scan get going, then wait for completion.
     try await Task.sleep(for: .milliseconds(5))
-    while model.phase == .scanning {
-        if Date() > deadline { throw TestTimeout() }
-        try await Task.sleep(for: .milliseconds(10))
-    }
+    try await waitUntil(timeout: timeout) { model.phase != .scanning }
     // Allow the trailing completion hop (revision bump etc.) to land.
     try await Task.sleep(for: .milliseconds(10))
 }
 
 @MainActor
-func waitUntil(timeout: TimeInterval = 10, _ condition: () -> Bool) async throws {
+/// Generous limits on purpose: CI machines are small and run every test in parallel with coverage on,
+/// so the main actor can be busy for many seconds. Before giving up, pending work gets one last chance
+/// to run (the deadline can pass while this task wasn't scheduled, not because the work is stuck).
+func waitUntil(timeout: TimeInterval = 30, _ condition: () -> Bool) async throws {
     let deadline = Date().addingTimeInterval(timeout)
     while !condition() {
-        if Date() > deadline { throw TestTimeout() }
+        if Date() > deadline {
+            try await Task.sleep(for: .milliseconds(250))
+            if condition() { return }
+            throw TestTimeout()
+        }
         try await Task.sleep(for: .milliseconds(10))
     }
 }
