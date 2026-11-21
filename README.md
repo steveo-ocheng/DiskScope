@@ -25,7 +25,8 @@ A fast, native macOS disk-usage browser — like `ncdu`, with a Finder-style int
   could run as formulas are neutralised
 - **Ask Claude** (optional, off by default): a panel on the right of the browser for questions about the scan —
   "What's using the most space?", "What can I safely delete?" — using your own Anthropic API key (see
-  [Security & privacy](#security--privacy) for exactly what's sent)
+  [Getting an API key](#getting-an-api-key-for-ask-claude) and [Security & privacy](#security--privacy) for exactly
+  what's sent)
 - Parallel scanner (readdir + fstatat, never follows symlinks, hard links counted once); matches `du`
 - Disk usage vs. apparent size, rescan a folder, move to Trash (with safety checks), show in Finder
 
@@ -79,12 +80,27 @@ signed with a Developer ID and notarized: `MACOS_CERTIFICATE_P12` (base64 of the
 `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID`, `NOTARY_PASSWORD`
 (an app-specific password). Without them it's ad-hoc signed and the notes include the Open Anyway steps.
 
+## Getting an API key for Ask Claude
+
+Ask Claude uses your own key from the Claude Console. It's billed separately from a Claude.ai Pro or Max
+subscription (pay as you go; a typical question costs a few cents).
+
+1. Sign in to the [Claude Console](https://platform.claude.com/), or create an account.
+2. Add credit under [Settings › Billing](https://platform.claude.com/settings/billing).
+3. Under [Settings › API Keys](https://platform.claude.com/settings/keys), click **Create Key** and name it "DiskScope".
+4. Copy the key (it starts with `sk-ant-` and is shown only once), then paste it into **DiskScope › Settings ›
+   Ask Claude** and click **Save**. Turn on **Enable Ask Claude**.
+5. Optional: set a monthly spend limit under [Settings › Limits](https://platform.claude.com/settings/limits).
+   Prices: [API pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+
+You can remove the key from DiskScope at any time (Settings › Remove Key) and revoke it in the Console.
+
 ## Security & privacy
 
 - **Scanning reads metadata only.** A scan reads names, sizes and dates (`readdir` + `fstatat`); it never opens
   files. DiskScope collects no analytics or telemetry.
 - **Offline by default.** The only network feature is the optional **Ask Claude** panel. It's off until you
-  enable it and enter your own Anthropic API key (from console.anthropic.com) in DiskScope › Settings; the key is
+  enable it and enter your own Anthropic API key (from the [Claude Console](https://platform.claude.com/settings/keys)) in DiskScope › Settings; the key is
   stored in the macOS Keychain and usage is billed to your key. Nothing is sent until you press Send. Then
   DiskScope sends a text summary of the scan to Anthropic's API over HTTPS, for Claude Opus 5.5 to answer: file and
   folder names relative to the scan root (your home folder shown as `~`), sizes, dates and the "Not in scan"

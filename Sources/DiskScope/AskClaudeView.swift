@@ -66,7 +66,14 @@ struct AskClaudePanel: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            SettingsLink { Text("Open Settings…") }
+            if !claude.hasKey {
+                Divider()
+                Text("How to get an API key").font(.headline)
+                APIKeyGuide()
+                    .font(.callout)
+            }
+            SettingsLink { Text(claude.hasKey ? "Open Settings…" : "Open Settings to Paste Your Key…") }
+                .buttonStyle(.borderedProminent)
             Spacer()
         }
         .padding(12)
@@ -241,6 +248,7 @@ struct ClaudeSettingsView: View {
     @State private var draft = ""
     @State private var message: String?
     @State private var failed = false
+    @State private var guideExpanded = true
 
     var body: some View {
         Form {
@@ -248,6 +256,13 @@ struct ClaudeSettingsView: View {
                 Toggle("Enable Ask Claude", isOn: $claude.enabled)
                 Text(verbatim: "Ask questions about a scan in a side panel. This is the only DiskScope feature that uses the network.")
                     .font(.callout).foregroundStyle(.secondary)
+            }
+
+            Section {
+                DisclosureGroup("How to get an API key", isExpanded: $guideExpanded) {
+                    APIKeyGuide()
+                        .padding(.top, 6)
+                }
             }
 
             Section("Anthropic API key") {
@@ -272,7 +287,7 @@ struct ClaudeSettingsView: View {
                 if let message {
                     Text(verbatim: message).font(.callout).foregroundStyle(failed ? .red : .secondary)
                 }
-                Text(verbatim: "Create a key in the Claude Console (console.anthropic.com) under API Keys. Questions are billed by Anthropic to that key's account; a typical question costs a fraction of a cent to a few cents. The key is stored only in your Mac's Keychain (not synced) and sent only to api.anthropic.com.")
+                Text(verbatim: "The key is stored only in your Mac's Keychain (not synced) and sent only to api.anthropic.com. Questions are billed by Anthropic to that key's account; a typical question costs a few cents. Remove Key deletes it from this Mac; you can also revoke it in the Claude Console at any time.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -285,7 +300,10 @@ struct ClaudeSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 540)
-        .onAppear { claude.refreshKeyStatus() }
+        .onAppear {
+            claude.refreshKeyStatus()
+            guideExpanded = !claude.hasKey
+        }
     }
 
     private func save() {
@@ -301,5 +319,49 @@ struct ClaudeSettingsView: View {
     private func show(_ text: String, failed: Bool) {
         message = text
         self.failed = failed
+    }
+}
+
+/// Step-by-step help for getting an Anthropic API key, with links into the Claude Console.
+struct APIKeyGuide: View {
+    enum Links {
+        static let console = URL(string: "https://platform.claude.com/")!
+        static let billing = URL(string: "https://platform.claude.com/settings/billing")!
+        static let keys = URL(string: "https://platform.claude.com/settings/keys")!
+        static let limits = URL(string: "https://platform.claude.com/settings/limits")!
+        static let pricing = URL(string: "https://platform.claude.com/docs/en/about-claude/pricing")!
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            step(1, "Sign in to the Claude Console, or create an account. A Claude.ai Pro or Max subscription doesn't cover this: the API is billed separately, pay as you go.",
+                 link: ("Open Claude Console", Links.console))
+            step(2, "Add credit under Settings › Billing. A typical question costs a few cents.",
+                 link: ("Open Billing", Links.billing))
+            step(3, "Under Settings › API Keys, click Create Key and name it “DiskScope”.",
+                 link: ("Open API Keys", Links.keys))
+            step(4, "Copy the key. It starts with sk-ant- and is shown only once. Paste it into DiskScope › Settings › Ask Claude and click Save.",
+                 link: nil)
+            step(5, "Optional: cap your spending with a monthly limit under Settings › Limits.",
+                 link: ("Open Limits", Links.limits))
+            Link("API pricing ↗", destination: Links.pricing)
+                .padding(.leading, 26)
+        }
+    }
+
+    private func step(_ number: Int, _ text: String, link: (title: String, url: URL)?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(verbatim: "\(number)")
+                .font(.caption.bold().monospacedDigit())
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(.quaternary))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let link {
+                    Link("\(link.title) ↗", destination: link.url)
+                }
+            }
+        }
     }
 }
